@@ -25,6 +25,7 @@ const AUTH_ACCOUNTS_KEY = "moa-auth-accounts-v1";
 const AUTH_SESSION_KEY = "moa-auth-session-v1";
 const LEGACY_MIGRATION_KEY = "moa-legacy-data-owner-v1";
 const USER_BACKUP_PREFIX = "moa-money-backup-v1";
+const PENDING_SIGNUP_PROFILE_PREFIX = "moa-pending-signup-profile-v1";
 const TODAY = new Date("2026-06-27T12:00:00+09:00");
 
 const TYPE_META = {
@@ -199,6 +200,43 @@ function userBackupKey(email) {
   return `${USER_BACKUP_PREFIX}:${encodeURIComponent(normalizeEmail(email))}`;
 }
 
+function pendingSignupProfileKey(email) {
+  return `${PENDING_SIGNUP_PROFILE_PREFIX}:${encodeURIComponent(normalizeEmail(email))}`;
+}
+
+function rememberPendingSignupProfile(email, name) {
+  const cleanEmail = normalizeEmail(email);
+  const cleanName = cleanProfileName(name);
+  if (!cleanEmail || !cleanName) return;
+
+  localStorage.setItem(
+    pendingSignupProfileKey(cleanEmail),
+    JSON.stringify({ name: cleanName, email: cleanEmail, savedAt: Date.now() })
+  );
+}
+
+function readPendingSignupProfile(email) {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail) return null;
+
+  try {
+    const raw = localStorage.getItem(pendingSignupProfileKey(cleanEmail));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const name = cleanProfileName(parsed?.name);
+    if (!name) return null;
+    return { name, email: cleanEmail };
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingSignupProfile(email) {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail) return;
+  localStorage.removeItem(pendingSignupProfileKey(cleanEmail));
+}
+
 
 function cleanProfileName(value) {
   return String(value || "").trim();
@@ -318,15 +356,17 @@ async function loadStateFromFirebase(user) {
   const defaults = createDefaultState();
   const data = await loadUserState(user.uid);
 
+  const pendingProfile = readPendingSignupProfile(user.email);
+
   if (!data) {
-    const profileName = resolveProfileName(user.displayName);
+    const profileName = resolveProfileName(pendingProfile?.name, user.displayName);
     const freshState = createBlankState({
       name: profileName,
-      email: user.email || "",
+      email: user.email || pendingProfile?.email || "",
     });
     freshState.profile = {
       name: profileName,
-      email: user.email || "",
+      email: user.email || pendingProfile?.email || "",
     };
     await createInitialUserState(user.uid, freshState);
     return freshState;
@@ -348,7 +388,7 @@ async function loadStateFromFirebase(user) {
     category.enabled = category.enabled !== false;
   });
 
-  const profileName = resolveProfileName(user.displayName, data.profile?.name);
+  const profileName = resolveProfileName(pendingProfile?.name, user.displayName, data.profile?.name);
 
   return {
     ...defaults,
@@ -452,20 +492,27 @@ function setAuthBusy(busy) {
 }
 
 async function openAppForFirebaseUser(user) {
+  const pendingProfile = readPendingSignupProfile(user.email);
+
   currentUser = {
     uid: user.uid,
-    name: resolveProfileName(user.displayName),
-    email: user.email || "",
+    name: resolveProfileName(pendingProfile?.name, user.displayName),
+    email: user.email || pendingProfile?.email || "",
   };
 
   state = await loadStateFromFirebase(user);
-  const profileName = resolveProfileName(user.displayName, state.profile?.name, currentUser.name);
+  const profileName = resolveProfileName(pendingProfile?.name, user.displayName, state.profile?.name, currentUser.name);
   currentUser.name = profileName;
   state.profile = {
     ...(state.profile || {}),
     name: profileName,
     email: currentUser.email,
   };
+
+  if (profileName && profileName !== "사용자") {
+    await saveStateToFirebase();
+    clearPendingSignupProfile(currentUser.email);
+  }
 
   document.getElementById("authPage").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
@@ -542,12 +589,14 @@ async function handleAuthSubmit(event) {
   setAuthBusy(true);
   try {
     if (isSignup) {
+      rememberPendingSignupProfile(email, name);
       const user = await signUpWithEmail({ name, email, password });
 
       currentUser = { uid: user.uid, name, email };
       state = createBlankState({ name, email });
       state.profile = { name, email };
       await saveStateToFirebase();
+      clearPendingSignupProfile(email);
       showToast(`${name}님, 모아에 오신 걸 환영해요.`);
       return;
     }
