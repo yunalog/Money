@@ -4865,13 +4865,20 @@ h2 { font-size: 22px; }
 
 
 .amount-korean-preview {
-  min-height: 18px;
-  margin: 6px 2px 0;
+  min-height: 14px;
+  margin: 4px 2px 0;
   color: var(--green);
   font-family: "Noto Sans KR", sans-serif;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.compact-money-preview {
+  color: #6f7a73;
+  font-size: 9px;
+  font-weight: 600;
 }
 
 
@@ -4910,4 +4917,12 @@ h2 { font-size: 22px; }
     line-height: 1.2;
     white-space: nowrap;
   }
+}
+
+.mini-input + .amount-korean-preview {
+  min-height: 12px;
+  margin: 3px 2px 0;
+  font-size: 8px;
+  line-height: 1.15;
+  text-align: right;
 }

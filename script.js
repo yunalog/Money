@@ -645,6 +645,11 @@ function parseMoneyInput(value) {
   return Number(String(value || "").replace(/[^0-9]/g, ""));
 }
 
+function formatMoneyInputValue(value) {
+  const amount = parseMoneyInput(value);
+  return amount ? amount.toLocaleString("ko-KR") : "";
+}
+
 function formatKoreanMoney(value) {
   const amount = parseMoneyInput(value);
   if (!amount) return "";
@@ -664,14 +669,41 @@ function formatKoreanMoney(value) {
   return `${result}원`;
 }
 
-function syncTransactionAmountPreview() {
-  const input = document.getElementById("transactionAmountInput");
-  const preview = document.getElementById("transactionAmountPreview");
-  if (!input || !preview) return;
+function getMoneyPreviewElement(input) {
+  if (!input) return null;
 
+  const explicitId = input.dataset.moneyPreview;
+  if (explicitId) return document.getElementById(explicitId);
+
+  const wrap = input.closest(".amount-input-wrap, .mini-input");
+  if (!wrap) return null;
+
+  let preview = wrap.nextElementSibling;
+  if (!preview || !preview.classList?.contains("amount-korean-preview")) {
+    preview = document.createElement("p");
+    preview.className = "amount-korean-preview compact-money-preview";
+    preview.setAttribute("aria-live", "polite");
+    wrap.insertAdjacentElement("afterend", preview);
+  }
+
+  return preview;
+}
+
+function syncMoneyInput(input) {
+  if (!input) return;
   const raw = String(input.value || "").replace(/[^0-9]/g, "");
   input.value = raw ? Number(raw).toLocaleString("ko-KR") : "";
-  preview.textContent = raw ? formatKoreanMoney(raw) : "";
+
+  const preview = getMoneyPreviewElement(input);
+  if (preview) preview.textContent = raw ? formatKoreanMoney(raw) : "";
+}
+
+function syncTransactionAmountPreview() {
+  syncMoneyInput(document.getElementById("transactionAmountInput"));
+}
+
+function syncAllMoneyInputs(root = document) {
+  root.querySelectorAll("[data-money-input]").forEach(syncMoneyInput);
 }
 
 function formatSignedWon(value) {
@@ -1666,7 +1698,7 @@ function renderAccounts() {
   document.getElementById("cashAssetSummary").textContent = formatWon(state.cash.balance);
   document.getElementById("accountAssetSummary").textContent = formatWon(accountTotal);
   document.getElementById("cardMonthlySummary").textContent = formatWon(totalMonthlyCardUsage(thisMonth));
-  document.getElementById("cashBalanceInput").value = Number(state.cash.balance || 0) || "";
+  document.getElementById("cashBalanceInput").value = formatMoneyInputValue(state.cash.balance);
 
   const target = document.getElementById("accountList");
   const creditCards = state.cards.filter((card) => card.type === "credit");
@@ -1732,7 +1764,7 @@ function cardAssetHtml(card) {
 }
 
 function saveCashBalance() {
-  const balance = Number(document.getElementById("cashBalanceInput").value || 0);
+  const balance = parseMoneyInput(document.getElementById("cashBalanceInput").value);
   if (balance < 0) {
     setHint("cashFormHint", "현금 잔액은 0원 이상으로 입력해주세요.", true);
     return;
@@ -1747,6 +1779,7 @@ function resetAccountForm() {
   editingAccountId = "";
   document.getElementById("accountNameInput").value = "";
   document.getElementById("accountBalanceInput").value = "";
+  syncMoneyInput(document.getElementById("accountBalanceInput"));
   document.getElementById("accountPrimaryInput").checked = false;
   updateAssetFormMode();
 }
@@ -1779,7 +1812,7 @@ function startEditAccount(id) {
   editingAccountId = id;
   document.getElementById("accountNameInput").value = account.name || account.title || "";
   document.getElementById("accountBankInput").value = account.bank || "기타";
-  document.getElementById("accountBalanceInput").value = Number(account.balance || 0);
+  document.getElementById("accountBalanceInput").value = formatMoneyInputValue(account.balance);
   document.getElementById("accountPrimaryInput").checked = Boolean(account.primary);
   document.getElementById("cardNameInput").value = "";
   document.getElementById("cardTypeInput").value = "check";
@@ -1791,7 +1824,7 @@ function startEditAccount(id) {
 function addAccount() {
   const name = document.getElementById("accountNameInput").value.trim();
   const bank = document.getElementById("accountBankInput").value;
-  const balance = Number(document.getElementById("accountBalanceInput").value || 0);
+  const balance = parseMoneyInput(document.getElementById("accountBalanceInput").value);
   const primary = document.getElementById("accountPrimaryInput").checked || state.accounts.length === 0;
 
   if (!name || !bank || balance < 0) {
@@ -1870,6 +1903,7 @@ function startEditCard(id) {
   }
   document.getElementById("accountNameInput").value = "";
   document.getElementById("accountBalanceInput").value = "";
+  syncMoneyInput(document.getElementById("accountBalanceInput"));
   document.getElementById("accountPrimaryInput").checked = false;
   updateAssetFormMode();
   setHint("cardFormHint", "선택한 카드를 수정 중이에요. 내용을 바꾼 뒤 저장해주세요.");
@@ -1969,7 +2003,7 @@ function renderCategories() {
           <button class="more-delete" type="button" data-delete-category="${escapeHtml(category.id)}" aria-label="${escapeHtml(category.name)} 삭제">×</button>
         </div>
         <div class="category-card-body">
-          <label><span>월 예산</span><div class="mini-input"><input type="number" min="0" step="1000" value="${Number(category.budget || 0)}" data-category-budget="${escapeHtml(category.id)}" /><b>원</b></div></label>
+          <label><span>월 예산</span><div class="mini-input"><input type="text" inputmode="numeric" autocomplete="off" value="${formatMoneyInputValue(category.budget)}" data-money-input data-category-budget="${escapeHtml(category.id)}" /><b>원</b></div></label>
           <label><span>연결 계좌</span><select data-category-account="${escapeHtml(category.id)}">
             <option value="">연결 안 함</option>
             ${state.accounts.map((account) => optionHtml(account.id, account.name, account.id === category.accountId)).join("")}
@@ -1988,7 +2022,7 @@ function addCategory() {
   const name = document.getElementById("categoryNameInput").value.trim();
   const managementKey = document.getElementById("categoryTypeInput").value;
   const managementItem = MANAGEMENT_ITEMS[managementKey];
-  const budget = Number(document.getElementById("categoryBudgetInput").value || 0);
+  const budget = parseMoneyInput(document.getElementById("categoryBudgetInput").value);
   const accountId = document.getElementById("categoryAccountInput").value;
 
   if (!name || !managementItem || !isManagementEnabled(managementKey) || budget < 0) {
@@ -2014,6 +2048,7 @@ function addCategory() {
   saveState();
   document.getElementById("categoryNameInput").value = "";
   document.getElementById("categoryBudgetInput").value = "";
+  syncMoneyInput(document.getElementById("categoryBudgetInput"));
   renderAll();
   showToast("새 카테고리를 추가했어요.");
 }
@@ -2032,7 +2067,7 @@ function removeCategory(id) {
 function updateCategorySetting(id, field, value) {
   const category = getCategory(id);
   if (!category) return;
-  category[field] = field === "budget" ? Number(value || 0) : value;
+  category[field] = field === "budget" ? parseMoneyInput(value) : value;
   saveState();
   renderDashboard();
   renderCategories();
@@ -2079,7 +2114,7 @@ function recurringItemHtml(item) {
 
 function addRecurring() {
   const name = document.getElementById("recurringNameInput").value.trim();
-  const amount = Number(document.getElementById("recurringAmountInput").value);
+  const amount = parseMoneyInput(document.getElementById("recurringAmountInput").value);
   const dayValue = document.getElementById("recurringDayInput").value;
   const accountId = document.getElementById("recurringAccountInput").value;
 
@@ -2108,6 +2143,7 @@ function addRecurring() {
   saveState();
   document.getElementById("recurringNameInput").value = "";
   document.getElementById("recurringAmountInput").value = "";
+  syncMoneyInput(document.getElementById("recurringAmountInput"));
   renderAll();
   showToast("자동이체 일정을 추가했어요.");
 }
@@ -2196,7 +2232,7 @@ function renderSettings() {
   });
   document.getElementById("amountDisplaySetting").value = state.settings.amountDisplay;
   document.getElementById("startPageSetting").value = state.settings.startPage;
-  document.getElementById("targetSavingSetting").value = Number(state.settings.targetSavingAmount || 0) || "";
+  document.getElementById("targetSavingSetting").value = formatMoneyInputValue(state.settings.targetSavingAmount);
   document.getElementById("targetSavingRateSetting").value = Number(state.settings.targetSavingRate || 0) || "";
   document.getElementById("reduceMotionSetting").checked = state.settings.reduceMotion;
   document.body.classList.toggle("reduce-motion", state.settings.reduceMotion);
@@ -2278,6 +2314,7 @@ function renderAll() {
   renderCategories();
   renderRecurring();
   renderSettings();
+  syncAllMoneyInputs();
 }
 
 function showPage(pageName) {
@@ -2445,8 +2482,11 @@ function bindEvents() {
   document.getElementById("transactionPaymentAssetInput").addEventListener("change", (event) => {
     if (state.accounts.some((account) => account.id === event.target.value)) document.getElementById("transactionAccountInput").value = event.target.value;
   });
+  document.addEventListener("input", (event) => {
+    if (event.target.matches("[data-money-input]")) syncMoneyInput(event.target);
+  });
+
   document.getElementById("sendTransactionBtn").addEventListener("click", addTransaction);
-  document.getElementById("transactionAmountInput").addEventListener("input", syncTransactionAmountPreview);
   document.getElementById("transactionAmountInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") addTransaction();
   });
@@ -2598,7 +2638,7 @@ function bindEvents() {
     showToast("첫 화면 설정을 저장했어요.");
   });
   document.getElementById("targetSavingSetting").addEventListener("change", (event) => {
-    state.settings.targetSavingAmount = Math.max(0, Number(event.target.value || 0));
+    state.settings.targetSavingAmount = Math.max(0, parseMoneyInput(event.target.value));
     saveState();
     renderDashboard();
     showToast(state.settings.targetSavingAmount ? "목표 저축 금액을 저장했어요." : "목표 저축 금액을 비웠어요.");
