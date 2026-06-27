@@ -95,7 +95,7 @@ let currentUser = null;
 let state = createDefaultState();
 let expandedMonthlyCard = "";
 let expandedWeeklyCard = "";
-let selectedDailyCalendarDate = TODAY.toISOString().slice(0, 10);
+let selectedDailyCalendarDate = "";
 let lastTransactionAmountPreviewText = "";
 let editingAccountId = "";
 let editingCardId = "";
@@ -1185,9 +1185,7 @@ function renderDailyCalendar() {
   });
 
   const todayKey = TODAY.toISOString().slice(0, 10);
-  if (!selectedDailyCalendarDate || !selectedDailyCalendarDate.startsWith(month)) {
-    selectedDailyCalendarDate = todayKey.startsWith(month) ? todayKey : `${month}-01`;
-  }
+  const activeDailyCalendarDate = selectedDailyCalendarDate?.startsWith(month) ? selectedDailyCalendarDate : "";
 
   const weekdayHtml = ["일", "월", "화", "수", "목", "금", "토"]
     .map((day) => `<span class="daily-calendar-weekday">${day}</span>`)
@@ -1208,29 +1206,32 @@ function renderDailyCalendar() {
       ? `${day}일 · 수입 ${formatWon(data.income)} / 지출 ${formatWon(data.expense)} / 저축 ${formatWon(data.saving)}`
       : `${day}일 · 거래 없음`;
     cells.push(`
-      <button class="daily-calendar-day ${hasData ? "has-data" : ""} ${dateKey === todayKey ? "today" : ""} ${dateKey === selectedDailyCalendarDate ? "selected" : ""}" type="button" data-calendar-date="${dateKey}" title="${escapeHtml(title)}" aria-expanded="${dateKey === selectedDailyCalendarDate}">
+      <button class="daily-calendar-day ${hasData ? "has-data" : ""} ${dateKey === todayKey ? "today" : ""} ${dateKey === activeDailyCalendarDate ? "selected" : ""}" type="button" data-calendar-date="${dateKey}" title="${escapeHtml(title)}" aria-expanded="${dateKey === activeDailyCalendarDate}">
         <span>${day}</span>
         ${hasData ? `<strong class="${net >= 0 ? "income" : "expense"}">${escapeHtml(amountLabel)}</strong>` : `<em>거래 없음</em>`}
       </button>
     `);
   }
 
-  const selectedData = byDate.get(selectedDailyCalendarDate) || { income: 0, expense: 0, saving: 0, count: 0, items: [] };
-  const selectedDetailHtml = dailyCalendarDetailHtml(selectedDailyCalendarDate, selectedData);
-  const selectedCellIndex = startBlank + Number(selectedDailyCalendarDate.slice(-2));
-  const detailInsertIndex = Math.ceil(selectedCellIndex / 7) * 7;
-  let detailInserted = false;
-  let cellHtml = cells.reduce((html, cell, index) => {
-    const next = html + cell;
-    if (index + 1 === detailInsertIndex) {
-      detailInserted = true;
-      return next + selectedDetailHtml;
-    }
-    return next;
-  }, "");
+  let cellHtml = cells.join("");
+  if (activeDailyCalendarDate) {
+    const selectedData = byDate.get(activeDailyCalendarDate) || { income: 0, expense: 0, saving: 0, count: 0, items: [] };
+    const selectedDetailHtml = dailyCalendarDetailHtml(activeDailyCalendarDate, selectedData);
+    const selectedCellIndex = startBlank + Number(activeDailyCalendarDate.slice(-2));
+    const detailInsertIndex = Math.ceil(selectedCellIndex / 7) * 7;
+    let detailInserted = false;
+    cellHtml = cells.reduce((html, cell, index) => {
+      const next = html + cell;
+      if (index + 1 === detailInsertIndex) {
+        detailInserted = true;
+        return next + selectedDetailHtml;
+      }
+      return next;
+    }, "");
 
-  if (!detailInserted) {
-    cellHtml += selectedDetailHtml;
+    if (!detailInserted) {
+      cellHtml += selectedDetailHtml;
+    }
   }
 
   const income = transactions.filter((item) => item.type === "income").reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -2649,7 +2650,8 @@ function bindEvents() {
   document.getElementById("dailyCalendarGrid")?.addEventListener("click", (event) => {
     const dayButton = event.target.closest("[data-calendar-date]");
     if (!dayButton) return;
-    selectedDailyCalendarDate = dayButton.dataset.calendarDate;
+    const clickedDate = dayButton.dataset.calendarDate;
+    selectedDailyCalendarDate = selectedDailyCalendarDate === clickedDate ? "" : clickedDate;
     renderDailyCalendar();
   });
 
