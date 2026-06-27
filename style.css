@@ -216,14 +216,29 @@ input::placeholder {
   font-size: 16px;
 }
 
-.profile-chip {
-  display: flex;
-  flex: 0 0 155px;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 9px;
+.profile-menu-wrap {
+  position: relative;
+  flex: 0 0 178px;
   padding-left: 14px;
   border-left: 1px solid var(--line);
+}
+
+.profile-chip {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 5px 7px;
+  border-radius: 13px;
+  background: transparent;
+  text-align: left;
+  transition: background var(--ease);
+}
+
+.profile-chip:hover,
+.profile-chip[aria-expanded="true"] {
+  background: var(--green-soft);
 }
 
 .profile-avatar {
@@ -239,14 +254,142 @@ input::placeholder {
   font-weight: 800;
 }
 
+.profile-avatar.large {
+  width: 50px;
+  height: 50px;
+  font-size: 17px;
+}
+
+.profile-copy {
+  flex: 1;
+  min-width: 0;
+}
+
 .profile-copy strong {
-  font-size: 12px;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-copy small {
   margin-top: 2px;
   color: var(--muted);
+  font-size: 11px;
+}
+
+.profile-chevron {
+  color: var(--muted);
+  font-size: 14px;
+  transition: transform var(--ease);
+}
+
+.profile-chip[aria-expanded="true"] .profile-chevron {
+  transform: rotate(180deg);
+}
+
+.profile-popover {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 13px);
+  right: 0;
+  width: min(350px, calc(100vw - 24px));
+  padding: 21px;
+  border: 1px solid rgba(255, 255, 255, 0.94);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 24px 70px rgba(30, 47, 37, 0.18);
+  backdrop-filter: blur(24px);
+  animation: popoverIn 160ms ease both;
+}
+
+@keyframes popoverIn {
+  from { opacity: 0; transform: translateY(-5px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.profile-popover-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 18px;
+}
+
+.profile-popover-head h2 {
+  font-size: 21px;
+}
+
+.popover-close {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--muted);
+  background: #f1f3f0;
+  font-size: 20px;
+}
+
+.profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 17px;
+  padding: 13px;
+  border-radius: 16px;
+  background: var(--green-soft);
+}
+
+.profile-summary strong,
+.profile-summary small {
+  display: block;
+  font-family: "Noto Sans KR", sans-serif;
+}
+
+.profile-summary strong {
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.profile-summary small {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.profile-summary small i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #4fa06f;
+}
+
+.profile-form {
+  display: grid;
+  gap: 13px;
+}
+
+.login-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-family: "Noto Sans KR", sans-serif;
+}
+
+.login-meta span {
+  color: var(--muted);
   font-size: 10px;
+}
+
+.login-meta strong {
+  font-size: 11px;
 }
 
 .content {
@@ -2210,6 +2353,94 @@ h3 {
   transform: translateY(0);
 }
 
+/* Readability scale */
+.brand-copy small { font-size: 10px; }
+.nav-btn { font-size: 14px; }
+.eyebrow { font-size: 12px; }
+h2 { font-size: 22px; }
+.heading-desc { font-size: 16px; }
+.date-chip,
+.count-chip { font-size: 13px; }
+.metric-trend { font-size: 11px; }
+.metric-card > p { font-size: 14px; }
+.metric-card > strong { font-size: clamp(24px, 2.3vw, 30px); }
+.metric-card > small { font-size: 12px; }
+.status-badge { font-size: 11px; }
+.donut-center small { font-size: 11px; }
+.ratio-copy span { font-size: 13px; }
+.ratio-copy strong { font-size: 16px; }
+.ratio-copy p { font-size: 12px; }
+.text-btn { font-size: 12px; }
+.compact-copy strong { font-size: 14px; }
+.compact-copy small,
+.compact-amount small { font-size: 11px; }
+.compact-amount strong { font-size: 14px; }
+.upcoming-item > div:nth-child(2) strong { font-size: 13px; }
+.upcoming-item > div:nth-child(2) small { font-size: 10px; }
+.upcoming-item > strong { font-size: 13px; }
+.composer-header strong { font-size: 15px; }
+.composer-header p { font-size: 12px; }
+.type-segment button { font-size: 13px; }
+.field > span { font-size: 11px; }
+.field input,
+.field select,
+.category-card-body select { font-size: 13px; }
+.amount-input-wrap b { font-size: 12px; }
+.send-btn,
+.primary-btn,
+.secondary-btn { font-size: 13px; }
+.form-hint { font-size: 11px; }
+.filter-chips button,
+.category-tabs button { font-size: 12px; }
+.month-total span { font-size: 12px; }
+.month-total strong { font-size: 18px; }
+.date-divider span { font-size: 13px; }
+.date-divider strong { font-size: 12px; }
+.transaction-table-head { font-size: 11px; }
+.cell { font-size: 13px; }
+.memo-cell b { font-size: 13px; }
+.memo-cell small { font-size: 10px; }
+.check-row strong { font-size: 12px; }
+.check-row small { font-size: 10px; }
+.section-heading p { font-size: 12px; }
+.account-actions > button:not(.more-delete),
+.primary-label { font-size: 10px; }
+.account-info p { font-size: 11px; }
+.account-info h3 { font-size: 17px; }
+.account-info > small { font-size: 10px; }
+.category-summary-row span { font-size: 11px; }
+.category-summary-row strong { font-size: 15px; }
+.category-card-top h3 { font-size: 16px; }
+.type-label { font-size: 10px; }
+.category-card-body label > span { font-size: 10px; }
+.mini-input input { font-size: 12px; }
+.mini-input b { font-size: 10px; }
+.category-card-body select { font-size: 11px; }
+.category-progress > div:first-child { font-size: 10px; }
+.optional-note { font-size: 10px; }
+.group-title h2 { font-size: 17px; }
+.group-title p { font-size: 10px; }
+.recurring-date strong { font-size: 14px; }
+.recurring-date small { font-size: 9px; }
+.recurring-copy strong { font-size: 12px; }
+.recurring-copy small { font-size: 9px; }
+.recurring-price strong { font-size: 11px; }
+.recurring-price small { font-size: 9px; }
+.toggle-row strong { font-size: 13px; }
+.toggle-row small { font-size: 10px; }
+.data-card p:last-child { font-size: 11px; }
+.management-head p:last-child { font-size: 12px; }
+.preset-buttons button { font-size: 11px; }
+.management-kind { font-size: 9px; }
+.management-item h3 { font-size: 14px; }
+.management-item > p { font-size: 10px; }
+.management-category-head { font-size: 9px; }
+.category-choice span,
+.management-categories .no-category { font-size: 9px; }
+.management-note p { font-size: 10px; }
+.empty-state p { font-size: 12px; }
+.toast { font-size: 12px; }
+
 .reduce-motion *,
 .reduce-motion *::before,
 .reduce-motion *::after {
@@ -2227,7 +2458,7 @@ h3 {
     flex: 1;
   }
 
-  .profile-chip {
+  .profile-menu-wrap {
     flex: 0 0 auto;
     border-left: 0;
   }
@@ -2353,9 +2584,17 @@ h3 {
     height: 38px;
   }
 
-  .profile-chip {
+  .profile-menu-wrap {
     flex-basis: auto;
     padding-left: 0;
+  }
+
+  .profile-chip {
+    padding: 3px;
+  }
+
+  .profile-chevron {
+    display: none;
   }
 
   .profile-avatar {

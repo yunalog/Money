@@ -121,6 +121,10 @@ function createDefaultState() {
 
   return {
     schemaVersion: 4,
+    profile: {
+      name: "김민지",
+      email: "minji@example.com",
+    },
     accounts,
     categories,
     transactions,
@@ -164,6 +168,10 @@ function loadState() {
       ...defaults,
       ...parsed,
       schemaVersion: 4,
+      profile: {
+        ...defaults.profile,
+        ...(parsed.profile || {}),
+      },
       accounts: Array.isArray(parsed.accounts) ? parsed.accounts : defaults.accounts,
       categories: migratedCategories,
       transactions: Array.isArray(parsed.transactions) ? parsed.transactions : defaults.transactions,
@@ -906,6 +914,63 @@ function toggleRecurring(id, checked) {
   renderRecurring();
 }
 
+function profileDisplayName(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return "사용자";
+  if (!trimmed.includes(" ") && trimmed.length >= 3 && trimmed.length <= 4) return trimmed.slice(1);
+  return trimmed.split(/\s+/)[0];
+}
+
+function profileAvatarText(name) {
+  const displayName = profileDisplayName(name);
+  return Array.from(displayName)[0] || "M";
+}
+
+function renderProfile() {
+  const name = state.profile?.name?.trim() || "사용자";
+  const email = state.profile?.email?.trim() || "";
+  const avatar = profileAvatarText(name);
+
+  document.getElementById("profileAvatar").textContent = avatar;
+  document.getElementById("profileAvatarLarge").textContent = avatar;
+  document.getElementById("profileHeaderName").textContent = name;
+  document.getElementById("profileSummaryName").textContent = name;
+  document.getElementById("dashboardProfileName").textContent = profileDisplayName(name);
+  document.getElementById("profileNameInput").value = name;
+  document.getElementById("profileEmailInput").value = email;
+}
+
+function setProfilePopover(open) {
+  const popover = document.getElementById("profilePopover");
+  const button = document.getElementById("profileMenuButton");
+  popover.classList.toggle("hidden", !open);
+  button.setAttribute("aria-expanded", String(open));
+  if (open) {
+    document.getElementById("profileNameInput").focus();
+  }
+}
+
+function saveProfile() {
+  const name = document.getElementById("profileNameInput").value.trim();
+  const emailInput = document.getElementById("profileEmailInput");
+  const email = emailInput.value.trim();
+
+  if (!name) {
+    setHint("profileFormHint", "표시할 이름을 입력해주세요.", true);
+    return;
+  }
+  if (!email || !emailInput.checkValidity()) {
+    setHint("profileFormHint", "올바른 이메일 주소를 입력해주세요.", true);
+    return;
+  }
+
+  state.profile = { name, email };
+  saveState();
+  renderProfile();
+  setProfilePopover(false);
+  showToast("프로필 정보를 저장했어요.");
+}
+
 function renderSettings() {
   renderManagementItems();
   document.querySelectorAll("[data-setting]").forEach((input) => {
@@ -982,6 +1047,7 @@ function emptyState(message) {
 }
 
 function renderAll() {
+  renderProfile();
   renderAccountOptions();
   renderDashboard();
   renderTransactionComposer();
@@ -1019,6 +1085,24 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-page-link]").forEach((button) => {
     button.addEventListener("click", () => showPage(button.dataset.pageLink));
+  });
+
+  document.getElementById("profileMenuButton").addEventListener("click", () => {
+    const isOpen = document.getElementById("profileMenuButton").getAttribute("aria-expanded") === "true";
+    setProfilePopover(!isOpen);
+  });
+  document.getElementById("closeProfileBtn").addEventListener("click", () => setProfilePopover(false));
+  document.getElementById("saveProfileBtn").addEventListener("click", saveProfile);
+  ["profileNameInput", "profileEmailInput"].forEach((id) => {
+    document.getElementById(id).addEventListener("keydown", (event) => {
+      if (event.key === "Enter") saveProfile();
+    });
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".profile-menu-wrap")) setProfilePopover(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setProfilePopover(false);
   });
 
   document.getElementById("transactionTypeSegment").addEventListener("click", (event) => {

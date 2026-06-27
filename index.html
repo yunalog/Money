@@ -44,9 +44,45 @@
         </button>
       </nav>
 
-      <div class="profile-chip" title="로컬 데모 계정">
-        <span class="profile-avatar">민</span>
-        <span class="profile-copy"><strong>김민지</strong><small>안녕하세요</small></span>
+      <div class="profile-menu-wrap">
+        <button id="profileMenuButton" class="profile-chip" type="button" aria-haspopup="dialog" aria-expanded="false">
+          <span id="profileAvatar" class="profile-avatar">민</span>
+          <span class="profile-copy"><strong id="profileHeaderName">김민지</strong><small>로그인 정보 보기</small></span>
+          <span class="profile-chevron">⌄</span>
+        </button>
+
+        <div id="profilePopover" class="profile-popover hidden" role="dialog" aria-label="로그인 정보">
+          <div class="profile-popover-head">
+            <div>
+              <p class="eyebrow">Signed in</p>
+              <h2>로그인 정보</h2>
+            </div>
+            <button id="closeProfileBtn" class="popover-close" type="button" aria-label="닫기">×</button>
+          </div>
+          <div class="profile-summary">
+            <span id="profileAvatarLarge" class="profile-avatar large">민</span>
+            <div>
+              <strong id="profileSummaryName">김민지</strong>
+              <small><i></i> 현재 로그인됨</small>
+            </div>
+          </div>
+          <div class="profile-form">
+            <label class="field">
+              <span>이름</span>
+              <input id="profileNameInput" type="text" maxlength="24" autocomplete="name" />
+            </label>
+            <label class="field">
+              <span>이메일</span>
+              <input id="profileEmailInput" type="email" maxlength="60" autocomplete="email" />
+            </label>
+            <div class="login-meta">
+              <span>로그인 방식</span>
+              <strong>이 브라우저의 로컬 계정</strong>
+            </div>
+            <button id="saveProfileBtn" class="primary-btn" type="button">프로필 정보 저장</button>
+            <p id="profileFormHint" class="form-hint" role="status"></p>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -55,7 +91,7 @@
         <div class="page-heading dashboard-heading">
           <div>
             <p class="eyebrow">Overview</p>
-            <h1><span id="greetingText">좋은 오후예요</span>, 민지님 <span class="wave">👋</span></h1>
+            <h1><span id="greetingText">좋은 오후예요</span>, <span id="dashboardProfileName">민지</span>님 <span class="wave">👋</span></h1>
             <p class="heading-desc"><span id="currentMonthText">6월</span>의 자산 흐름을 한눈에 살펴보세요.</p>
           </div>
           <div class="date-chip">
