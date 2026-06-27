@@ -29,7 +29,6 @@ export function getFirebaseAuthMessage(error) {
 
 export async function signUpWithEmail({ name, email, password }) {
   const cleanEmail = normalizeEmail(email);
-
   const result = await createUserWithEmailAndPassword(auth, cleanEmail, password);
 
   await updateProfile(result.user, {

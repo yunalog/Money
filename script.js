@@ -1,32 +1,20 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateProfile,
-} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+  getCurrentFirebaseUser,
+  getFirebaseAuthMessage,
+  loginWithEmail,
+  logoutFirebase,
+  signUpWithEmail,
+  updateFirebaseProfileName,
+  watchAuthState,
+} from "./auth.js";
+
 import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  serverTimestamp,
-} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "여기에_apiKey_붙여넣기",
-  authDomain: "여기에_authDomain_붙여넣기",
-  projectId: "여기에_projectId_붙여넣기",
-  storageBucket: "여기에_storageBucket_붙여넣기",
-  messagingSenderId: "여기에_messagingSenderId_붙여넣기",
-  appId: "여기에_appId_붙여넣기",
-};
-
-const firebaseApp = initializeApp(firebaseConfig);
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
+  backupUserState,
+  createInitialUserState,
+  loadUserBackup,
+  loadUserState,
+  saveUserState,
+} from "./database.js";
 
 const STORAGE_KEY = "moa-money-v3";
 const USER_DATA_PREFIX = "moa-money-user-v1";
@@ -230,22 +218,24 @@ function createBlankState(profile = state.profile || currentUser || {}) {
 }
 
 function backupCurrentState() {
-  if (!currentUser?.email) return;
-  const backup = {
-    savedAt: new Date().toISOString(),
-    state,
-  };
-  localStorage.setItem(userBackupKey(currentUser.email), JSON.stringify(backup));
+  const user = getCurrentFirebaseUser();
+  if (!user) return;
+
+  backupUserState(user.uid, state).catch((error) => {
+    console.error("Firebase 백업 실패:", error);
+    showToast("Firebase 백업 중 문제가 생겼어요.");
+  });
 }
 
-function readBackupState() {
-  if (!currentUser?.email) return null;
+async function readBackupState() {
+  const user = getCurrentFirebaseUser();
+  if (!user) return null;
+
   try {
-    const raw = localStorage.getItem(userBackupKey(currentUser.email));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.state || null;
-  } catch {
+    return await loadUserBackup(user.uid);
+  } catch (error) {
+    console.error("Firebase 백업 불러오기 실패:", error);
+    showToast("Firebase 백업 불러오기 중 문제가 생겼어요.");
     return null;
   }
 }
@@ -311,15 +301,11 @@ function loadState(email) {
   }
 }
 
-function userStateDocRef(uid) {
-  return doc(db, "users", uid, "book", "state");
-}
-
 async function loadStateFromFirebase(user) {
   const defaults = createDefaultState();
-  const snap = await getDoc(userStateDocRef(user.uid));
+  const data = await loadUserState(user.uid);
 
-  if (!snap.exists()) {
+  if (!data) {
     const freshState = createBlankState({
       name: user.displayName || "사용자",
       email: user.email || "",
@@ -328,16 +314,10 @@ async function loadStateFromFirebase(user) {
       name: user.displayName || "사용자",
       email: user.email || "",
     };
-    await setDoc(userStateDocRef(user.uid), {
-      ...freshState,
-      ownerUid: user.uid,
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-    });
+    await createInitialUserState(user.uid, freshState);
     return freshState;
   }
 
-  const data = snap.data();
   const parsedCategories = Array.isArray(data.categories) ? data.categories : defaults.categories;
   const migratedCategories = data.schemaVersion === 4
     ? parsedCategories
@@ -380,17 +360,18 @@ async function loadStateFromFirebase(user) {
 }
 
 async function saveStateToFirebase() {
-  if (!auth.currentUser) return;
-  await setDoc(userStateDocRef(auth.currentUser.uid), {
+  const user = getCurrentFirebaseUser();
+  if (!user) return;
+
+  await saveUserState(user.uid, {
     ...state,
-    ownerUid: auth.currentUser.uid,
+    ownerUid: user.uid,
     profile: {
       ...(state.profile || {}),
-      name: state.profile?.name || auth.currentUser.displayName || "사용자",
-      email: auth.currentUser.email || "",
+      name: state.profile?.name || user.displayName || "사용자",
+      email: user.email || "",
     },
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
+  });
 }
 
 function saveState() {
@@ -478,21 +459,11 @@ async function openAppForFirebaseUser(user) {
 
 async function logout() {
   try {
-    await signOut(auth);
+    await logoutFirebase();
   } catch (error) {
     console.error("Firebase 로그아웃 실패:", error);
     showToast("로그아웃 중 문제가 생겼어요.");
   }
-}
-
-function firebaseAuthMessage(error) {
-  const code = error?.code || "";
-  if (code === "auth/email-already-in-use") return "이미 가입된 이메일이에요. 로그인해주세요.";
-  if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") return "이메일 또는 비밀번호를 다시 확인해주세요.";
-  if (code === "auth/weak-password") return "비밀번호는 8자 이상으로 입력해주세요.";
-  if (code === "auth/invalid-email") return "올바른 이메일 주소를 입력해주세요.";
-  if (code === "auth/network-request-failed") return "네트워크 연결을 확인해주세요.";
-  return "로그인 처리 중 문제가 생겼어요. Firebase 설정을 확인해주세요.";
 }
 
 async function handleAuthSubmit(event) {
@@ -519,21 +490,20 @@ async function handleAuthSubmit(event) {
   setAuthBusy(true);
   try {
     if (isSignup) {
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(result.user, { displayName: name });
+      const user = await signUpWithEmail({ name, email, password });
 
-      currentUser = { uid: result.user.uid, name, email };
+      currentUser = { uid: user.uid, name, email };
       state = createBlankState({ name, email });
       await saveStateToFirebase();
       showToast(`${name}님, 모아에 오신 걸 환영해요.`);
       return;
     }
 
-    const result = await signInWithEmailAndPassword(auth, email, password);
-    showToast(`${result.user.displayName || "사용자"}님, 다시 만나서 반가워요.`);
+    const user = await loginWithEmail({ email, password });
+    showToast(`${user.displayName || "사용자"}님, 다시 만나서 반가워요.`);
   } catch (error) {
     console.error("Firebase 인증 실패:", error);
-    setAuthHint(firebaseAuthMessage(error), true);
+    setAuthHint(getFirebaseAuthMessage(error), true);
   } finally {
     setAuthBusy(false);
   }
@@ -1655,8 +1625,8 @@ async function saveProfile() {
   }
 
   try {
-    if (auth.currentUser) {
-      await updateProfile(auth.currentUser, { displayName: name });
+    if (getCurrentFirebaseUser()) {
+      await updateFirebaseProfileName(name);
     }
     state.profile = { name, email };
     currentUser = { ...(currentUser || {}), name, email };
@@ -2082,8 +2052,8 @@ function bindEvents() {
     showToast("새 가계부를 시작했어요.");
   });
 
-  document.getElementById("restoreLastBookBtn").addEventListener("click", () => {
-    const backup = readBackupState();
+  document.getElementById("restoreLastBookBtn").addEventListener("click", async () => {
+    const backup = await readBackupState();
     if (!backup) {
       showToast("복원 가능한 마지막 가계부가 없어요.");
       return;
@@ -2129,7 +2099,7 @@ function init() {
   document.getElementById("authPage").classList.remove("hidden");
   document.getElementById("app").classList.add("hidden");
 
-  onAuthStateChanged(auth, async (user) => {
+  watchAuthState(async (user) => {
     if (!user) {
       currentUser = null;
       state = createDefaultState();

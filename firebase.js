@@ -3,12 +3,12 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-aut
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "여기에_apiKey_붙여넣기",
-  authDomain: "여기에_authDomain_붙여넣기",
-  projectId: "여기에_projectId_붙여넣기",
-  storageBucket: "여기에_storageBucket_붙여넣기",
-  messagingSenderId: "여기에_messagingSenderId_붙여넣기",
-  appId: "여기에_appId_붙여넣기",
+  apiKey: "AIzaSyAtBewWaepmCq8H7btz5T_w8TlsGgTRduE",
+  authDomain: "money-management-b91ac.firebaseapp.com",
+  projectId: "money-management-b91ac",
+  storageBucket: "money-management-b91ac.firebasestorage.app",
+  messagingSenderId: "812560682907",
+  appId: "1:812560682907:web:d88dc8b3c78080b3131b3e",
 };
 
 export const app = initializeApp(firebaseConfig);
