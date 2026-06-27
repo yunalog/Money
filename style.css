@@ -5391,3 +5391,41 @@ h2 { font-size: 22px; }
     justify-content: flex-start;
   }
 }
+
+
+/* Amount preview alignment + persistent transaction preview */
+.amount-field {
+  position: relative;
+}
+
+.amount-field .amount-input-wrap input {
+  text-align: right;
+}
+
+#transactionAmountPreview.amount-korean-preview {
+  position: static !important;
+  display: block !important;
+  width: 100%;
+  max-width: 100%;
+  min-height: 13px !important;
+  margin: 4px 2px 0 0 !important;
+  overflow: hidden;
+  color: var(--green);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#transactionAmountPreview.amount-korean-preview:empty {
+  display: block !important;
+}
+
+/* Daily calendar selected-day detail is inserted under the clicked week row. */
+.daily-calendar-grid .daily-calendar-detail {
+  grid-column: 1 / -1;
+}

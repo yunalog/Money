@@ -96,6 +96,7 @@ let state = createDefaultState();
 let expandedMonthlyCard = "";
 let expandedWeeklyCard = "";
 let selectedDailyCalendarDate = TODAY.toISOString().slice(0, 10);
+let lastTransactionAmountPreviewText = "";
 let editingAccountId = "";
 let editingCardId = "";
 
@@ -696,7 +697,13 @@ function syncMoneyInput(input, { createPreview = true } = {}) {
     ? document.getElementById("transactionAmountPreview")
     : createPreview ? ensureMoneyPreview(input) : null;
 
-  if (preview) preview.textContent = raw ? formatKoreanMoney(raw) : "";
+  if (preview) {
+    const previewText = raw ? formatKoreanMoney(raw) : "";
+    preview.textContent = previewText;
+    if (input.id === "transactionAmountInput" && previewText) {
+      lastTransactionAmountPreviewText = previewText;
+    }
+  }
   return Number(raw || 0);
 }
 
@@ -704,8 +711,14 @@ function syncAllMoneyInputs() {
   document.querySelectorAll(".money-input, [data-category-budget]").forEach((input) => syncMoneyInput(input));
 }
 
-function syncTransactionAmountPreview() {
-  syncMoneyInput(document.getElementById("transactionAmountInput"));
+function syncTransactionAmountPreview({ keepLast = false } = {}) {
+  const input = document.getElementById("transactionAmountInput");
+  syncMoneyInput(input);
+
+  const preview = document.getElementById("transactionAmountPreview");
+  if (keepLast && preview && !input.value && lastTransactionAmountPreviewText) {
+    preview.textContent = lastTransactionAmountPreviewText;
+  }
 }
 
 function formatSignedWon(value) {
@@ -1206,10 +1219,19 @@ function renderDailyCalendar() {
   const selectedDetailHtml = dailyCalendarDetailHtml(selectedDailyCalendarDate, selectedData);
   const selectedCellIndex = startBlank + Number(selectedDailyCalendarDate.slice(-2));
   const detailInsertIndex = Math.ceil(selectedCellIndex / 7) * 7;
-  const cellHtml = cells.reduce((html, cell, index) => {
+  let detailInserted = false;
+  let cellHtml = cells.reduce((html, cell, index) => {
     const next = html + cell;
-    return index + 1 === detailInsertIndex ? next + selectedDetailHtml : next;
+    if (index + 1 === detailInsertIndex) {
+      detailInserted = true;
+      return next + selectedDetailHtml;
+    }
+    return next;
   }, "");
+
+  if (!detailInserted) {
+    cellHtml += selectedDetailHtml;
+  }
 
   const income = transactions.filter((item) => item.type === "income").reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const expense = transactions.filter((item) => item.type === "expense").reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -1806,7 +1828,7 @@ function addTransaction() {
   viewedMonth = date.slice(0, 7);
   document.getElementById("transactionMemoInput").value = "";
   document.getElementById("transactionAmountInput").value = "";
-  syncTransactionAmountPreview();
+  syncTransactionAmountPreview({ keepLast: true });
   renderAll();
   showPage("transactions");
   showToast("거래를 기록했어요.");
