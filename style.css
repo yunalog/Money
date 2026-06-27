@@ -5201,3 +5201,193 @@ h2 { font-size: 22px; }
     font-size: 9px;
   }
 }
+
+
+/* Final money preview alignment: right edge of input, tiny, no layout jump */
+.amount-input-wrap,
+.mini-input,
+.field:has(.amount-input-wrap),
+.category-card-body label {
+  position: relative;
+}
+
+.amount-korean-preview {
+  position: absolute !important;
+  z-index: 3;
+  top: calc(100% + 4px) !important;
+  right: 2px !important;
+  left: auto !important;
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 4px);
+  min-height: 0 !important;
+  margin: 0 !important;
+  overflow: hidden;
+  color: var(--green);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.amount-korean-preview:empty {
+  display: none !important;
+}
+
+.amount-korean-preview.mini {
+  top: calc(100% + 3px) !important;
+  right: 2px !important;
+  left: auto !important;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+/* Calendar day detail */
+.daily-calendar-day {
+  cursor: pointer;
+  transition: border var(--ease), box-shadow var(--ease), transform var(--ease), background var(--ease);
+}
+
+.daily-calendar-day:not(.empty):hover {
+  border-color: rgba(72, 118, 95, 0.42);
+  box-shadow: 0 10px 24px rgba(41, 57, 48, 0.07);
+  transform: translateY(-1px);
+}
+
+.daily-calendar-day.selected {
+  border-color: rgba(46, 89, 69, 0.72);
+  background: linear-gradient(180deg, #fff, #edf6ef);
+  box-shadow: 0 0 0 3px rgba(72, 118, 95, 0.1), 0 10px 24px rgba(41, 57, 48, 0.08);
+}
+
+.daily-calendar-day > em {
+  color: #b0b8b2;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 9px;
+  font-style: normal;
+  text-align: right;
+}
+
+.daily-calendar-detail {
+  grid-column: 1 / -1;
+  margin: -1px 0 5px;
+  padding: 16px;
+  border: 1px solid rgba(72, 118, 95, 0.2);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 32px rgba(41, 57, 48, 0.07);
+}
+
+.daily-calendar-detail-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 13px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--line-strong);
+}
+
+.daily-calendar-detail-head h3 {
+  font-size: 16px;
+}
+
+.daily-calendar-detail-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--muted);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.daily-calendar-detail-summary b {
+  margin-left: 3px;
+}
+
+.daily-calendar-transaction-list {
+  display: grid;
+  gap: 7px;
+}
+
+.daily-calendar-transaction {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 13px;
+  background: #f8faf7;
+}
+
+.daily-calendar-transaction div {
+  min-width: 0;
+}
+
+.daily-calendar-transaction strong,
+.daily-calendar-transaction small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-calendar-transaction strong {
+  margin-bottom: 3px;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 12px;
+}
+
+.daily-calendar-transaction small {
+  color: var(--muted);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 9px;
+}
+
+.daily-calendar-transaction > b {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.daily-calendar-empty-detail {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 72px;
+  color: #a3aaa5;
+  text-align: center;
+}
+
+.daily-calendar-empty-detail span {
+  margin-bottom: 4px;
+  font-size: 18px;
+}
+
+.daily-calendar-empty-detail p {
+  margin: 0;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 10px;
+}
+
+@media (max-width: 760px) {
+  .daily-calendar-detail {
+    padding: 13px;
+    border-radius: 15px;
+  }
+
+  .daily-calendar-detail-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .daily-calendar-detail-summary {
+    justify-content: flex-start;
+  }
+}

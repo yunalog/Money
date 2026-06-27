@@ -95,6 +95,7 @@ let currentUser = null;
 let state = createDefaultState();
 let expandedMonthlyCard = "";
 let expandedWeeklyCard = "";
+let selectedDailyCalendarDate = TODAY.toISOString().slice(0, 10);
 let editingAccountId = "";
 let editingCardId = "";
 
@@ -1161,36 +1162,54 @@ function renderDailyCalendar() {
   const byDate = new Map();
 
   transactions.forEach((item) => {
-    if (!byDate.has(item.date)) byDate.set(item.date, { income: 0, expense: 0, saving: 0, count: 0 });
+    if (!byDate.has(item.date)) byDate.set(item.date, { income: 0, expense: 0, saving: 0, count: 0, items: [] });
     const bucket = byDate.get(item.date);
     if (item.type === "income") bucket.income += Number(item.amount || 0);
     if (item.type === "expense") bucket.expense += Number(item.amount || 0);
     if (item.type === "saving") bucket.saving += Number(item.amount || 0);
     bucket.count += 1;
+    bucket.items.push(item);
   });
+
+  const todayKey = TODAY.toISOString().slice(0, 10);
+  if (!selectedDailyCalendarDate || !selectedDailyCalendarDate.startsWith(month)) {
+    selectedDailyCalendarDate = todayKey.startsWith(month) ? todayKey : `${month}-01`;
+  }
 
   const weekdayHtml = ["일", "월", "화", "수", "목", "금", "토"]
     .map((day) => `<span class="daily-calendar-weekday">${day}</span>`)
     .join("");
-  const blanks = Array.from({ length: startBlank }, () => `<span class="daily-calendar-day empty"></span>`).join("");
-  const todayKey = TODAY.toISOString().slice(0, 10);
-  const dayCells = Array.from({ length: daysInMonth }, (_, index) => {
-    const day = index + 1;
+
+  const cells = [];
+  for (let index = 0; index < startBlank; index += 1) {
+    cells.push(`<span class="daily-calendar-day empty"></span>`);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
     const dateKey = `${month}-${String(day).padStart(2, "0")}`;
-    const data = byDate.get(dateKey) || { income: 0, expense: 0, saving: 0, count: 0 };
+    const data = byDate.get(dateKey) || { income: 0, expense: 0, saving: 0, count: 0, items: [] };
     const net = data.income - data.expense - data.saving;
     const hasData = data.count > 0;
     const amountLabel = hasData ? formatSignedWon(net) : "";
     const title = hasData
       ? `${day}일 · 수입 ${formatWon(data.income)} / 지출 ${formatWon(data.expense)} / 저축 ${formatWon(data.saving)}`
       : `${day}일 · 거래 없음`;
-    return `
-      <button class="daily-calendar-day ${hasData ? "has-data" : ""} ${dateKey === todayKey ? "today" : ""}" type="button" title="${escapeHtml(title)}">
+    cells.push(`
+      <button class="daily-calendar-day ${hasData ? "has-data" : ""} ${dateKey === todayKey ? "today" : ""} ${dateKey === selectedDailyCalendarDate ? "selected" : ""}" type="button" data-calendar-date="${dateKey}" title="${escapeHtml(title)}" aria-expanded="${dateKey === selectedDailyCalendarDate}">
         <span>${day}</span>
-        ${hasData ? `<strong class="${net >= 0 ? "income" : "expense"}">${escapeHtml(amountLabel)}</strong>` : ""}
+        ${hasData ? `<strong class="${net >= 0 ? "income" : "expense"}">${escapeHtml(amountLabel)}</strong>` : `<em>거래 없음</em>`}
       </button>
-    `;
-  }).join("");
+    `);
+  }
+
+  const selectedData = byDate.get(selectedDailyCalendarDate) || { income: 0, expense: 0, saving: 0, count: 0, items: [] };
+  const selectedDetailHtml = dailyCalendarDetailHtml(selectedDailyCalendarDate, selectedData);
+  const selectedCellIndex = startBlank + Number(selectedDailyCalendarDate.slice(-2));
+  const detailInsertIndex = Math.ceil(selectedCellIndex / 7) * 7;
+  const cellHtml = cells.reduce((html, cell, index) => {
+    const next = html + cell;
+    return index + 1 === detailInsertIndex ? next + selectedDetailHtml : next;
+  }, "");
 
   const income = transactions.filter((item) => item.type === "income").reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const expense = transactions.filter((item) => item.type === "expense").reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -1202,7 +1221,48 @@ function renderDailyCalendar() {
     <span>지출 <b class="expense">${formatWon(expense)}</b></span>
     <span>저축 <b class="saving">${formatWon(saving)}</b></span>
   `;
-  grid.innerHTML = `${weekdayHtml}${blanks}${dayCells}`;
+  grid.innerHTML = `${weekdayHtml}${cellHtml}`;
+}
+
+function dailyCalendarDetailHtml(dateKey, data) {
+  const dateLabel = formatDate(dateKey, { month: "long", day: "numeric", weekday: "long" });
+  const items = [...(data.items || [])]
+    .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+
+  const rows = items.length
+    ? items.map((item) => {
+        const category = getCategory(item.categoryId);
+        const meta = TYPE_META[item.type] || TYPE_META.expense;
+        const sign = item.type === "income" ? "+" : item.type === "expense" ? "−" : "";
+        return `
+          <div class="daily-calendar-transaction">
+            <span class="category-mini ${escapeHtml(category?.color || "sage")}">${escapeHtml(category?.icon || meta.icon)}</span>
+            <div>
+              <strong>${escapeHtml(item.memo || category?.name || meta.label)}</strong>
+              <small>${escapeHtml(category?.name || meta.label)} · ${escapeHtml(paymentAssetName(item))}</small>
+            </div>
+            <b class="${escapeHtml(meta.className)}">${sign}${formatWon(item.amount)}</b>
+          </div>
+        `;
+      }).join("")
+    : `<div class="daily-calendar-empty-detail"><span>⌁</span><p>이 날짜에는 등록된 거래가 없어요.</p></div>`;
+
+  return `
+    <section class="daily-calendar-detail" aria-live="polite">
+      <div class="daily-calendar-detail-head">
+        <div>
+          <p class="eyebrow">Selected day</p>
+          <h3>${escapeHtml(dateLabel)} 거래내역</h3>
+        </div>
+        <div class="daily-calendar-detail-summary">
+          <span>수입 <b class="income">${formatWon(data.income || 0)}</b></span>
+          <span>지출 <b class="expense">${formatWon(data.expense || 0)}</b></span>
+          <span>저축 <b class="saving">${formatWon(data.saving || 0)}</b></span>
+        </div>
+      </div>
+      <div class="daily-calendar-transaction-list">${rows}</div>
+    </section>
+  `;
 }
 
 function renderMonthlyCards() {
@@ -2562,6 +2622,13 @@ function bindEvents() {
     const cardKey = `${card.dataset.weekMonth}:${card.dataset.weekCard}`;
     expandedWeeklyCard = expandedWeeklyCard === cardKey ? "" : cardKey;
     renderWeeklyCards();
+  });
+
+  document.getElementById("dailyCalendarGrid")?.addEventListener("click", (event) => {
+    const dayButton = event.target.closest("[data-calendar-date]");
+    if (!dayButton) return;
+    selectedDailyCalendarDate = dayButton.dataset.calendarDate;
+    renderDailyCalendar();
   });
 
   document.getElementById("transactionTypeSegment").addEventListener("click", (event) => {
