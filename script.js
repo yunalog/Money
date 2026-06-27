@@ -151,7 +151,12 @@ function createDefaultState() {
   ];
 
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
+    cash: { balance: 120000 },
+    cards: [
+      { id: "card-kakao-check", name: "카카오 체크카드", type: "check", linkedAccountId: "acc-daily" },
+      { id: "card-hyundai-zero", name: "현대 Zero", type: "credit", linkedAccountId: "" },
+    ],
     profile: {
       name: "",
       email: "",
@@ -255,7 +260,9 @@ function createBlankState(profile = state.profile || currentUser || {}) {
       name: resolveProfileName(profile.name, currentUser?.name),
       email: profile.email || currentUser?.email || "",
     },
+    cash: { balance: 0 },
     accounts: [],
+    cards: [],
     categories: [],
     transactions: [],
     recurring: [],
@@ -329,14 +336,16 @@ function loadState(email) {
     return {
       ...defaults,
       ...parsed,
-      schemaVersion: 4,
+      schemaVersion: 5,
       profile: {
         ...defaults.profile,
         ...(parsed.profile || {}),
       },
-      accounts: Array.isArray(parsed.accounts) ? parsed.accounts : defaults.accounts,
+      cash: normalizeCash(parsed.cash, defaults.cash),
+      accounts: normalizeAccounts(Array.isArray(parsed.accounts) ? parsed.accounts : defaults.accounts),
+      cards: normalizeCards(parsed.cards, Array.isArray(parsed.accounts) ? parsed.accounts : defaults.accounts),
       categories: migratedCategories,
-      transactions: Array.isArray(parsed.transactions) ? parsed.transactions : defaults.transactions,
+      transactions: normalizeTransactions(Array.isArray(parsed.transactions) ? parsed.transactions : defaults.transactions),
       recurring: Array.isArray(parsed.recurring) ? parsed.recurring : defaults.recurring,
       settings: {
         ...defaults.settings,
@@ -393,16 +402,18 @@ async function loadStateFromFirebase(user) {
   return {
     ...defaults,
     ...data,
-    schemaVersion: 4,
+    schemaVersion: 5,
     profile: {
       ...defaults.profile,
       ...(data.profile || {}),
       name: profileName,
       email: user.email || "",
     },
-    accounts: Array.isArray(data.accounts) ? data.accounts : defaults.accounts,
+    cash: normalizeCash(data.cash, defaults.cash),
+    accounts: normalizeAccounts(Array.isArray(data.accounts) ? data.accounts : defaults.accounts),
+    cards: normalizeCards(data.cards, Array.isArray(data.accounts) ? data.accounts : defaults.accounts),
     categories: migratedCategories,
-    transactions: Array.isArray(data.transactions) ? data.transactions : defaults.transactions,
+    transactions: normalizeTransactions(Array.isArray(data.transactions) ? data.transactions : defaults.transactions),
     recurring: Array.isArray(data.recurring) ? data.recurring : defaults.recurring,
     settings: {
       ...defaults.settings,
@@ -655,6 +666,136 @@ function getCategory(id) {
   return state.categories.find((category) => category.id === id);
 }
 
+function normalizeCash(cash, fallback = { balance: 0 }) {
+  if (cash && typeof cash === "object") return { balance: Number(cash.balance || 0) };
+  return { balance: Number(fallback?.balance || 0) };
+}
+
+function normalizeAccounts(accounts) {
+  return (Array.isArray(accounts) ? accounts : []).map((account, index) => ({
+    id: account.id || uid("acc"),
+    name: account.name || "이름 없는 계좌",
+    bank: account.bank || "기타",
+    balance: Number(account.balance || 0),
+    initialBalance: Number(account.initialBalance ?? account.balance ?? 0),
+    primary: Boolean(account.primary || index === 0 && !accounts.some((item) => item.primary)),
+  }));
+}
+
+function normalizeCards(cards, accounts = []) {
+  const source = Array.isArray(cards) ? cards : [];
+  return source.map((card) => ({
+    id: card.id || uid("card"),
+    name: card.name || "이름 없는 카드",
+    type: card.type === "credit" ? "credit" : "check",
+    linkedAccountId: card.type === "credit" ? "" : (card.linkedAccountId || accounts[0]?.id || ""),
+  }));
+}
+
+function normalizeTransactions(transactions) {
+  return (Array.isArray(transactions) ? transactions : []).map((transaction) => {
+    const next = { ...transaction };
+    if (!next.paymentMethod) {
+      if (next.type === "transfer") next.paymentMethod = "transfer";
+      else next.paymentMethod = next.type === "expense" ? "transfer" : "transfer";
+    }
+    if (!next.paymentAssetId) {
+      next.paymentAssetId = next.paymentMethod === "cash" ? "cash" : next.accountId || "";
+    }
+    if (!next.accountId && next.paymentMethod === "transfer") next.accountId = next.paymentAssetId || "";
+    return next;
+  });
+}
+
+function ensureAssetState() {
+  state.cash = normalizeCash(state.cash);
+  state.accounts = normalizeAccounts(state.accounts);
+  state.cards = normalizeCards(state.cards, state.accounts);
+  state.transactions = normalizeTransactions(state.transactions);
+}
+
+function getCard(id) {
+  return state.cards.find((card) => card.id === id);
+}
+
+function paymentMethodLabel(method) {
+  if (method === "cash") return "현금";
+  if (method === "card") return "카드";
+  return "계좌이체";
+}
+
+function paymentAssetName(transaction) {
+  if (transaction.paymentMethod === "cash") return "현금";
+  if (transaction.paymentMethod === "card") {
+    const card = getCard(transaction.paymentAssetId);
+    return card ? card.name : "카드 없음";
+  }
+  const account = getAccount(transaction.paymentAssetId || transaction.accountId);
+  return account ? account.name : "계좌 없음";
+}
+
+function paymentAssetIcon(transaction) {
+  if (transaction.paymentMethod === "cash") return "💵";
+  if (transaction.paymentMethod === "card") return "💳";
+  return "🏦";
+}
+
+function cardUsage(cardId, month = viewedMonth) {
+  const total = state.transactions
+    .filter((transaction) => transaction.paymentMethod === "card" && transaction.paymentAssetId === cardId && transaction.type === "expense")
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const monthly = state.transactions
+    .filter((transaction) => transaction.paymentMethod === "card" && transaction.paymentAssetId === cardId && transaction.type === "expense" && transaction.date.startsWith(month))
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  return { total, monthly };
+}
+
+function totalMonthlyCardUsage(month = TODAY.toISOString().slice(0, 7)) {
+  return state.cards.reduce((sum, card) => sum + cardUsage(card.id, month).monthly, 0);
+}
+
+function totalCreditCardDue(month = TODAY.toISOString().slice(0, 7)) {
+  return state.cards
+    .filter((card) => card.type === "credit")
+    .reduce((sum, card) => sum + cardUsage(card.id, month).monthly, 0);
+}
+
+function applyTransactionToAssets(transaction, direction = 1) {
+  const amount = Number(transaction.amount || 0) * direction;
+  if (!amount) return;
+
+  if (transaction.type === "income") {
+    const account = getAccount(transaction.paymentAssetId || transaction.accountId);
+    if (account) account.balance += amount;
+    return;
+  }
+
+  if (transaction.type === "expense") {
+    if (transaction.paymentMethod === "cash") {
+      state.cash.balance -= amount;
+      return;
+    }
+    if (transaction.paymentMethod === "card") {
+      const card = getCard(transaction.paymentAssetId);
+      if (card?.type === "check") {
+        const linkedAccount = getAccount(card.linkedAccountId);
+        if (linkedAccount) linkedAccount.balance -= amount;
+      }
+      return;
+    }
+    const account = getAccount(transaction.paymentAssetId || transaction.accountId);
+    if (account) account.balance -= amount;
+    return;
+  }
+
+  if (transaction.type === "transfer") {
+    const source = getAccount(transaction.accountId || transaction.paymentAssetId);
+    const target = getAccount(transaction.targetAccountId);
+    if (source) source.balance -= amount;
+    if (target) target.balance += amount;
+  }
+}
+
 function categoryManagementKey(category) {
   if (!category) return "";
   if (category.type === "expense") {
@@ -738,7 +879,7 @@ function monthlyFlow(month) {
 }
 
 function totalAssets() {
-  return state.accounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
+  return Number(state.cash?.balance || 0) + state.accounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
 }
 
 function totalSavings() {
@@ -775,6 +916,7 @@ function optionHtml(value, label, selected = false) {
 }
 
 function renderAccountOptions() {
+  ensureAssetState();
   const primary = state.accounts.find((account) => account.primary) || state.accounts[0];
   const accountOptions = state.accounts
     .map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.id === primary?.id))
@@ -783,8 +925,9 @@ function renderAccountOptions() {
     .map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`))
     .join("")}`;
 
-  ["transactionAccountInput", "transactionTargetAccountInput", "recurringAccountInput"].forEach((id) => {
+  ["transactionAccountInput", "transactionTargetAccountInput", "recurringAccountInput", "cardLinkedAccountInput"].forEach((id) => {
     const select = document.getElementById(id);
+    if (!select) return;
     const current = select.value;
     select.innerHTML = accountOptions || `<option value="">계좌를 먼저 추가해주세요</option>`;
     if (state.accounts.some((account) => account.id === current)) select.value = current;
@@ -795,6 +938,74 @@ function renderAccountOptions() {
   categoryAccountInput.innerHTML = accountOptionsWithNone;
   if (state.accounts.some((account) => account.id === currentCategoryAccount)) {
     categoryAccountInput.value = currentCategoryAccount;
+  }
+
+  renderPaymentOptions();
+}
+
+function renderPaymentOptions() {
+  const methodInput = document.getElementById("transactionPaymentMethodInput");
+  const assetInput = document.getElementById("transactionPaymentAssetInput");
+  const assetLabel = document.getElementById("paymentAssetLabel");
+  const paymentMethodField = document.getElementById("paymentMethodField");
+  const paymentAssetField = document.getElementById("paymentAssetField");
+  const sourceAccountField = document.getElementById("sourceAccountField");
+  if (!methodInput || !assetInput) return;
+
+  const previousAsset = assetInput.value;
+  const isTransfer = transactionType === "transfer";
+  const isIncome = transactionType === "income";
+  const isExpense = transactionType === "expense";
+
+  paymentMethodField.classList.toggle("hidden", isTransfer || isIncome);
+  paymentAssetField.classList.toggle("hidden", isTransfer);
+  sourceAccountField.classList.toggle("hidden", !isTransfer);
+  document.getElementById("targetAccountField").classList.toggle("hidden", !isTransfer);
+
+  if (isTransfer) {
+    methodInput.value = "transfer";
+    document.getElementById("transactionAccountInput").value = document.getElementById("transactionAccountInput").value || state.accounts[0]?.id || "";
+    return;
+  }
+
+  if (isIncome) {
+    methodInput.value = "transfer";
+    assetLabel.textContent = "입금 계좌";
+    assetInput.innerHTML = state.accounts.length
+      ? state.accounts.map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.primary)).join("")
+      : `<option value="">계좌를 먼저 추가해주세요</option>`;
+  } else if (isExpense) {
+    const method = methodInput.value || "cash";
+    methodInput.value = method;
+    if (method === "cash") {
+      assetLabel.textContent = "사용 자산";
+      assetInput.innerHTML = `<option value="cash">현금 · ${formatWon(state.cash?.balance || 0)}</option>`;
+    } else if (method === "card") {
+      assetLabel.textContent = "사용 카드";
+      assetInput.innerHTML = state.cards.length
+        ? state.cards.map((card) => {
+            const account = getAccount(card.linkedAccountId);
+            const suffix = card.type === "check" ? `체크 · ${account?.name || "연결 계좌 없음"}` : "신용";
+            return optionHtml(card.id, `${card.name} · ${suffix}`);
+          }).join("")
+        : `<option value="">카드를 먼저 추가해주세요</option>`;
+    } else {
+      assetLabel.textContent = "출금 계좌";
+      assetInput.innerHTML = state.accounts.length
+        ? state.accounts.map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.primary)).join("")
+        : `<option value="">계좌를 먼저 추가해주세요</option>`;
+    }
+  } else {
+    methodInput.value = "transfer";
+    assetLabel.textContent = "사용 계좌";
+    assetInput.innerHTML = state.accounts.length
+      ? state.accounts.map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.primary)).join("")
+      : `<option value="">계좌를 먼저 추가해주세요</option>`;
+  }
+
+  if ([...assetInput.options].some((option) => option.value === previousAsset)) assetInput.value = previousAsset;
+  if (assetInput.value && state.accounts.some((account) => account.id === assetInput.value)) {
+    document.getElementById("transactionAccountInput").value = assetInput.value;
   }
 }
 
@@ -1176,7 +1387,6 @@ function renderRecentTransactions() {
 
   target.innerHTML = items.map((item) => {
     const category = getCategory(item.categoryId);
-    const account = getAccount(item.accountId);
     const type = TYPE_META[item.type] || TYPE_META.expense;
     const amountClass = type.className;
     const sign = item.type === "income" ? "+" : item.type === "expense" ? "−" : "";
@@ -1185,7 +1395,7 @@ function renderRecentTransactions() {
         <span class="category-dot ${escapeHtml(category?.color || "sage")}">${escapeHtml(category?.icon || type.icon)}</span>
         <div class="compact-copy">
           <strong>${escapeHtml(item.memo || category?.name || type.label)}</strong>
-          <small>${escapeHtml(category?.name || type.label)} · ${escapeHtml(account?.name || "계좌 없음")}</small>
+          <small>${escapeHtml(category?.name || type.label)} · ${escapeHtml(paymentAssetName(item))}</small>
         </div>
         <div class="compact-amount">
           <strong class="${amountClass}">${sign}${formatWon(item.amount)}</strong>
@@ -1253,14 +1463,21 @@ function renderTransactionComposer() {
     if (matchingCategories.some((category) => category.id === currentCategory)) categoryInput.value = currentCategory;
   }
 
-  document.getElementById("targetAccountField").classList.toggle("hidden", transactionType !== "transfer");
+  renderPaymentOptions();
   syncAccountFromCategory();
 }
 
 function syncAccountFromCategory() {
   if (transactionType === "transfer") return;
   const category = getCategory(document.getElementById("transactionCategoryInput").value);
-  if (category?.accountId && getAccount(category.accountId)) {
+  const methodInput = document.getElementById("transactionPaymentMethodInput");
+  const assetInput = document.getElementById("transactionPaymentAssetInput");
+  if (category?.accountId && getAccount(category.accountId) && transactionType !== "expense") {
+    assetInput.value = category.accountId;
+    document.getElementById("transactionAccountInput").value = category.accountId;
+  }
+  if (transactionType === "expense" && methodInput.value === "transfer" && category?.accountId && getAccount(category.accountId)) {
+    assetInput.value = category.accountId;
     document.getElementById("transactionAccountInput").value = category.accountId;
   }
 }
@@ -1301,7 +1518,7 @@ function renderTransactionHistory() {
       </div>
       <div class="transaction-table">
         <div class="transaction-table-head">
-          <span>날짜</span><span>카테고리</span><span>사용 통장</span><span>사용 내역</span><span>금액</span><span></span>
+          <span>날짜</span><span>카테고리</span><span>결제수단</span><span>사용 내역</span><span>금액</span><span></span>
         </div>
         ${items.map(transactionRowHtml).join("")}
       </div>
@@ -1311,16 +1528,15 @@ function renderTransactionHistory() {
 
 function transactionRowHtml(item) {
   const category = getCategory(item.categoryId);
-  const account = getAccount(item.accountId);
   const targetAccount = getAccount(item.targetAccountId);
   const meta = TYPE_META[item.type] || TYPE_META.expense;
   const sign = meta.sign || "";
-  const transferLabel = item.type === "transfer" && targetAccount ? ` → ${targetAccount.name}` : "";
+  const transferLabel = item.type === "transfer" && targetAccount ? `${paymentAssetName(item)} → ${targetAccount.name}` : paymentAssetName(item);
   return `
     <div class="transaction-row">
       <span class="cell date-cell">${formatDate(item.date, { month: "2-digit", day: "2-digit" })}</span>
       <span class="cell category-cell"><i class="category-mini ${escapeHtml(category?.color || "sage")}">${escapeHtml(category?.icon || meta.icon)}</i><b>${escapeHtml(category?.name || meta.label)}</b></span>
-      <span class="cell account-cell">${escapeHtml(account?.name || "계좌 없음")}${escapeHtml(transferLabel)}</span>
+      <span class="cell account-cell"><i>${paymentAssetIcon(item)}</i>${escapeHtml(transferLabel)}</span>
       <span class="cell memo-cell"><b>${escapeHtml(item.memo || meta.label)}</b><small>${escapeHtml(meta.label)}</small></span>
       <strong class="cell row-amount ${meta.className}">${sign}${formatWon(item.amount)}</strong>
       <button class="row-delete" type="button" data-delete-transaction="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.memo)} 거래 삭제">×</button>
@@ -1331,44 +1547,60 @@ function transactionRowHtml(item) {
 function addTransaction() {
   const date = document.getElementById("transactionDateInput").value;
   const categoryId = document.getElementById("transactionCategoryInput").value;
-  const accountId = document.getElementById("transactionAccountInput").value;
+  const paymentMethodInput = document.getElementById("transactionPaymentMethodInput");
+  const paymentAssetInput = document.getElementById("transactionPaymentAssetInput");
+  const method = transactionType === "transfer" ? "transfer" : paymentMethodInput.value;
+  const paymentAssetId = transactionType === "transfer"
+    ? document.getElementById("transactionAccountInput").value
+    : paymentAssetInput.value;
+  const accountId = transactionType === "transfer" ? paymentAssetId : (method === "transfer" ? paymentAssetId : "");
   const targetAccountId = document.getElementById("transactionTargetAccountInput").value;
   const memo = document.getElementById("transactionMemoInput").value.trim();
   const amount = Number(document.getElementById("transactionAmountInput").value);
 
-  if (!date || !accountId || !memo || !amount || amount <= 0) {
-    setHint("transactionFormHint", "날짜, 사용 통장, 사용 내역과 금액을 모두 입력해주세요.", true);
+  if (!date || !memo || !amount || amount <= 0) {
+    setHint("transactionFormHint", "날짜, 사용 내역과 금액을 모두 입력해주세요.", true);
     return;
   }
   if (transactionType !== "transfer" && !categoryId) {
     setHint("transactionFormHint", "거래에 맞는 카테고리를 선택해주세요.", true);
     return;
   }
-  if (transactionType === "transfer" && (!targetAccountId || targetAccountId === accountId)) {
+  if (transactionType === "transfer" && (!paymentAssetId || !targetAccountId || targetAccountId === paymentAssetId)) {
     setHint("transactionFormHint", "서로 다른 보내는 통장과 받는 통장을 선택해주세요.", true);
     return;
   }
+  if (transactionType === "income" && !paymentAssetId) {
+    setHint("transactionFormHint", "입금 계좌를 선택해주세요.", true);
+    return;
+  }
+  if (transactionType === "expense") {
+    if (method === "card" && !getCard(paymentAssetId)) {
+      setHint("transactionFormHint", "사용할 카드를 선택해주세요.", true);
+      return;
+    }
+    if (method === "transfer" && !getAccount(paymentAssetId)) {
+      setHint("transactionFormHint", "출금 계좌를 선택해주세요.", true);
+      return;
+    }
+  }
 
-  state.transactions.push({
+  const transaction = {
     id: uid("tx"),
     type: transactionType,
     categoryId: transactionType === "transfer" ? "" : categoryId,
     accountId,
     targetAccountId: transactionType === "transfer" ? targetAccountId : "",
+    paymentMethod: method,
+    paymentAssetId: method === "cash" ? "cash" : paymentAssetId,
     amount,
     memo,
     date,
     createdAt: Date.now(),
-  });
+  };
 
-  const source = getAccount(accountId);
-  if (source && transactionType === "income") source.balance += amount;
-  if (source && transactionType === "expense") source.balance -= amount;
-  if (source && transactionType === "transfer") source.balance -= amount;
-  if (transactionType === "transfer") {
-    const target = getAccount(targetAccountId);
-    if (target) target.balance += amount;
-  }
+  state.transactions.push(transaction);
+  applyTransactionToAssets(transaction, 1);
 
   saveState();
   viewedMonth = date.slice(0, 7);
@@ -1383,14 +1615,7 @@ function removeTransaction(id) {
   const item = state.transactions.find((transaction) => transaction.id === id);
   if (!item) return;
 
-  const source = getAccount(item.accountId);
-  if (source && item.type === "income") source.balance -= Number(item.amount);
-  if (source && item.type === "expense") source.balance += Number(item.amount);
-  if (source && item.type === "transfer") source.balance += Number(item.amount);
-  if (item.type === "transfer") {
-    const target = getAccount(item.targetAccountId);
-    if (target) target.balance -= Number(item.amount);
-  }
+  applyTransactionToAssets(item, -1);
 
   state.transactions = state.transactions.filter((transaction) => transaction.id !== id);
   saveState();
@@ -1399,31 +1624,87 @@ function removeTransaction(id) {
 }
 
 function renderAccounts() {
-  document.getElementById("accountCount").textContent = state.accounts.length;
-  const target = document.getElementById("accountList");
-  if (!state.accounts.length) {
-    target.innerHTML = emptyState("등록된 계좌가 없어요. 첫 계좌를 추가해보세요.");
-    return;
-  }
+  ensureAssetState();
+  const accountTotal = state.accounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
+  const thisMonth = TODAY.toISOString().slice(0, 7);
+  document.getElementById("accountCount").textContent = 1 + state.accounts.length + state.cards.length;
+  document.getElementById("cashAssetSummary").textContent = formatWon(state.cash.balance);
+  document.getElementById("accountAssetSummary").textContent = formatWon(accountTotal);
+  document.getElementById("cardMonthlySummary").textContent = formatWon(totalMonthlyCardUsage(thisMonth));
+  document.getElementById("cashBalanceInput").value = Number(state.cash.balance || 0) || "";
 
-  target.innerHTML = state.accounts.map((account, index) => `
-    <article class="account-card ${account.primary ? "primary-account" : ""}">
-      <div class="account-accent accent-${index % 4}"></div>
-      <div class="account-card-top">
-        <span class="bank-symbol">${escapeHtml(account.bank.slice(0, 1))}</span>
-        <div class="account-actions">
-          ${account.primary ? `<span class="primary-label">주 사용</span>` : `<button type="button" data-primary-account="${escapeHtml(account.id)}">주 사용으로</button>`}
-          <button class="more-delete" type="button" data-delete-account="${escapeHtml(account.id)}" aria-label="${escapeHtml(account.name)} 삭제">×</button>
+  const target = document.getElementById("accountList");
+  const creditCards = state.cards.filter((card) => card.type === "credit");
+  const accountSections = state.accounts.map((account, index) => {
+    const linkedCards = state.cards.filter((card) => card.type === "check" && card.linkedAccountId === account.id);
+    return `
+      <section class="asset-pair-row">
+        <article class="account-card ${account.primary ? "primary-account" : ""}">
+          <div class="account-accent accent-${index % 4}"></div>
+          <div class="account-card-top">
+            <span class="bank-symbol">${escapeHtml(account.bank.slice(0, 1))}</span>
+            <div class="account-actions">
+              ${account.primary ? `<span class="primary-label">주거래</span>` : `<button type="button" data-primary-account="${escapeHtml(account.id)}">주거래로</button>`}
+              <button class="more-delete" type="button" data-delete-account="${escapeHtml(account.id)}" aria-label="${escapeHtml(account.name)} 삭제">×</button>
+            </div>
+          </div>
+          <div class="account-info">
+            <p>${escapeHtml(account.bank)}</p>
+            <h3>${escapeHtml(account.name)}</h3>
+            <strong>${formatWon(account.balance)}</strong>
+            <small>등록 기본 잔액 ${formatWon(account.initialBalance ?? account.balance)}</small>
+          </div>
+        </article>
+        <div class="linked-card-column">
+          ${linkedCards.length ? linkedCards.map(cardAssetHtml).join("") : `<article class="linked-card-empty"><span>💳</span><p>연결된 체크카드가 없어요.</p></article>`}
         </div>
-      </div>
-      <div class="account-info">
-        <p>${escapeHtml(account.bank)}</p>
-        <h3>${escapeHtml(account.name)}</h3>
-        <strong>${formatWon(account.balance)}</strong>
-        <small>등록 기본 잔액 ${formatWon(account.initialBalance ?? account.balance)}</small>
+      </section>
+    `;
+  }).join("");
+
+  const cashHtml = `
+    <section class="asset-pair-row cash-row">
+      <article class="account-card cash-card">
+        <div class="account-card-top"><span class="bank-symbol">현</span><span class="primary-label">기본 자산</span></div>
+        <div class="account-info"><p>현금</p><h3>지갑 / 보유 현금</h3><strong>${formatWon(state.cash.balance)}</strong><small>거래 등록에서 현금 결제를 선택하면 자동 반영돼요.</small></div>
+      </article>
+    </section>
+  `;
+
+  const creditHtml = creditCards.length ? `
+    <section class="asset-credit-section">
+      <div class="section-heading"><h2>신용카드</h2><p>신용카드는 계좌 잔액을 바로 차감하지 않고 사용액만 누적해요.</p></div>
+      <div class="credit-card-grid">${creditCards.map(cardAssetHtml).join("")}</div>
+    </section>
+  ` : "";
+
+  target.innerHTML = `${cashHtml}${accountSections || emptyState("등록된 계좌가 없어요. 첫 계좌를 추가해보세요.")}${creditHtml}`;
+}
+
+function cardAssetHtml(card) {
+  const usage = cardUsage(card.id, TODAY.toISOString().slice(0, 7));
+  const linkedAccount = getAccount(card.linkedAccountId);
+  return `
+    <article class="asset-card-item ${card.type === "credit" ? "credit" : "check"}">
+      <div class="asset-card-top"><span>💳</span><div><strong>${escapeHtml(card.name)}</strong><small>${card.type === "credit" ? "신용카드" : `체크카드 · ${escapeHtml(linkedAccount?.name || "연결 계좌 없음")}`}</small></div><button class="more-delete" type="button" data-delete-card="${escapeHtml(card.id)}" aria-label="${escapeHtml(card.name)} 삭제">×</button></div>
+      <div class="asset-card-values">
+        <div><span>이번 달 사용액</span><strong>${formatWon(usage.monthly)}</strong></div>
+        <div><span>총 사용액</span><strong>${formatWon(usage.total)}</strong></div>
       </div>
     </article>
-  `).join("");
+  `;
+}
+
+function saveCashBalance() {
+  const balance = Number(document.getElementById("cashBalanceInput").value || 0);
+  if (balance < 0) {
+    setHint("cashFormHint", "현금 잔액은 0원 이상으로 입력해주세요.", true);
+    return;
+  }
+  state.cash.balance = balance;
+  saveState();
+  renderAll();
+  showToast("현금 잔액을 저장했어요.");
 }
 
 function addAccount() {
@@ -1433,7 +1714,7 @@ function addAccount() {
   const primary = document.getElementById("accountPrimaryInput").checked || state.accounts.length === 0;
 
   if (!name || !bank || balance < 0) {
-    setHint("accountFormHint", "계좌 이름과 은행, 올바른 기본 잔액을 입력해주세요.", true);
+    setHint("accountFormHint", "계좌 이름과 은행, 올바른 현재 잔액을 입력해주세요.", true);
     return;
   }
   if (primary) state.accounts.forEach((account) => { account.primary = false; });
@@ -1450,17 +1731,14 @@ function setPrimaryAccount(id) {
   state.accounts.forEach((account) => { account.primary = account.id === id; });
   saveState();
   renderAll();
-  showToast("주 사용 계좌를 변경했어요.");
+  showToast("주거래 계좌를 변경했어요.");
 }
 
 function removeAccount(id) {
-  if (state.accounts.length <= 1) {
-    showToast("계좌는 최소 한 개가 필요해요.");
-    return;
-  }
-  const used = state.transactions.some((item) => item.accountId === id || item.targetAccountId === id);
-  if (used) {
-    showToast("거래 내역이 연결된 계좌는 삭제할 수 없어요.");
+  const used = state.transactions.some((item) => item.accountId === id || item.targetAccountId === id || item.paymentAssetId === id);
+  const linkedCard = state.cards.some((card) => card.linkedAccountId === id);
+  if (used || linkedCard) {
+    showToast("거래 내역이나 체크카드가 연결된 계좌는 삭제할 수 없어요.");
     return;
   }
   const wasPrimary = getAccount(id)?.primary;
@@ -1475,6 +1753,36 @@ function removeAccount(id) {
   saveState();
   renderAll();
   showToast("계좌를 삭제했어요.");
+}
+
+function addCard() {
+  const name = document.getElementById("cardNameInput").value.trim();
+  const type = document.getElementById("cardTypeInput").value === "credit" ? "credit" : "check";
+  const linkedAccountId = type === "check" ? document.getElementById("cardLinkedAccountInput").value : "";
+  if (!name) {
+    setHint("cardFormHint", "카드 이름을 입력해주세요.", true);
+    return;
+  }
+  if (type === "check" && !getAccount(linkedAccountId)) {
+    setHint("cardFormHint", "체크카드는 연결 계좌를 선택해야 해요.", true);
+    return;
+  }
+  state.cards.push({ id: uid("card"), name, type, linkedAccountId });
+  saveState();
+  document.getElementById("cardNameInput").value = "";
+  renderAll();
+  showToast("새 카드를 추가했어요.");
+}
+
+function removeCard(id) {
+  if (state.transactions.some((item) => item.paymentMethod === "card" && item.paymentAssetId === id)) {
+    showToast("거래 내역이 연결된 카드는 삭제할 수 없어요.");
+    return;
+  }
+  state.cards = state.cards.filter((card) => card.id !== id);
+  saveState();
+  renderAll();
+  showToast("카드를 삭제했어요.");
 }
 
 function renderCategories() {
@@ -1994,6 +2302,10 @@ function bindEvents() {
     renderTransactionComposer();
   });
   document.getElementById("transactionCategoryInput").addEventListener("change", syncAccountFromCategory);
+  document.getElementById("transactionPaymentMethodInput").addEventListener("change", renderPaymentOptions);
+  document.getElementById("transactionPaymentAssetInput").addEventListener("change", (event) => {
+    if (state.accounts.some((account) => account.id === event.target.value)) document.getElementById("transactionAccountInput").value = event.target.value;
+  });
   document.getElementById("sendTransactionBtn").addEventListener("click", addTransaction);
   document.getElementById("transactionAmountInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") addTransaction();
@@ -2013,12 +2325,19 @@ function bindEvents() {
     if (button) removeTransaction(button.dataset.deleteTransaction);
   });
 
+  document.getElementById("saveCashBtn").addEventListener("click", saveCashBalance);
   document.getElementById("addAccountBtn").addEventListener("click", addAccount);
+  document.getElementById("addCardBtn").addEventListener("click", addCard);
+  document.getElementById("cardTypeInput").addEventListener("change", (event) => {
+    document.getElementById("linkedAccountField").classList.toggle("hidden", event.target.value === "credit");
+  });
   document.getElementById("accountList").addEventListener("click", (event) => {
     const primaryButton = event.target.closest("[data-primary-account]");
     const deleteButton = event.target.closest("[data-delete-account]");
+    const deleteCardButton = event.target.closest("[data-delete-card]");
     if (primaryButton) setPrimaryAccount(primaryButton.dataset.primaryAccount);
     if (deleteButton) removeAccount(deleteButton.dataset.deleteAccount);
+    if (deleteCardButton) removeCard(deleteCardButton.dataset.deleteCard);
   });
 
   document.getElementById("addCategoryBtn").addEventListener("click", addCategory);

@@ -93,7 +93,7 @@
           <span class="nav-icon">↕</span><span>거래</span>
         </button>
         <button class="nav-btn" type="button" data-page="accounts">
-          <span class="nav-icon">▣</span><span>계좌 설정</span>
+          <span class="nav-icon">▣</span><span>자산 설정</span>
         </button>
         <button class="nav-btn" type="button" data-page="categories">
           <span class="nav-icon">◫</span><span>카테고리 설정</span>
@@ -171,7 +171,7 @@
             </div>
             <p>총자산</p>
             <strong id="totalAsset">0원</strong>
-            <small>모든 계좌의 현재 잔액</small>
+            <small>현금과 모든 계좌의 현재 잔액</small>
           </article>
           <article id="savingsMetricCard" class="metric-card">
             <div class="metric-top">
@@ -352,8 +352,20 @@
               <span>카테고리</span>
               <select id="transactionCategoryInput"></select>
             </label>
-            <label class="field">
-              <span>사용 통장</span>
+            <label id="paymentMethodField" class="field">
+              <span>결제수단</span>
+              <select id="transactionPaymentMethodInput">
+                <option value="cash">현금</option>
+                <option value="card">카드</option>
+                <option value="transfer">계좌이체</option>
+              </select>
+            </label>
+            <label id="paymentAssetField" class="field">
+              <span id="paymentAssetLabel">자산 선택</span>
+              <select id="transactionPaymentAssetInput"></select>
+            </label>
+            <label id="sourceAccountField" class="field hidden">
+              <span>보내는 통장</span>
               <select id="transactionAccountInput"></select>
             </label>
             <label id="targetAccountField" class="field hidden">
@@ -389,34 +401,66 @@
       <section id="accountsPage" class="page hidden">
         <div class="page-heading">
           <div>
-            <p class="eyebrow">Accounts</p>
-            <h1>계좌 설정</h1>
-            <p class="heading-desc">내 계좌를 등록하고 거래에 기본으로 사용할 통장을 정하세요.</p>
+            <p class="eyebrow">Assets</p>
+            <h1>자산 설정</h1>
+            <p class="heading-desc">현금, 계좌, 카드를 등록하고 거래 등록 시 사용할 결제수단을 관리하세요.</p>
           </div>
-          <span class="count-chip"><b id="accountCount">0</b>개의 계좌</span>
+          <span class="count-chip"><b id="accountCount">0</b>개의 자산</span>
         </div>
 
-        <div class="settings-layout account-layout">
+        <div class="asset-summary-grid">
+          <article class="asset-summary-card cash"><span>💵</span><div><small>현금 잔액</small><strong id="cashAssetSummary">0원</strong></div></article>
+          <article class="asset-summary-card"><span>🏦</span><div><small>계좌 잔액 합계</small><strong id="accountAssetSummary">0원</strong></div></article>
+          <article class="asset-summary-card"><span>💳</span><div><small>이번 달 카드 사용액</small><strong id="cardMonthlySummary">0원</strong></div></article>
+        </div>
+
+        <div class="settings-layout account-layout asset-layout">
           <article class="panel form-card sticky-card">
             <div class="panel-title-row">
+              <div><p class="eyebrow">Cash</p><h2>현금 설정</h2></div>
+              <span class="section-icon">💵</span>
+            </div>
+            <div class="stack-form asset-form-block">
+              <label class="field"><span>현금 잔액</span><div class="amount-input-wrap"><input id="cashBalanceInput" type="number" min="0" step="1000" placeholder="0" /><b>원</b></div></label>
+              <button id="saveCashBtn" class="primary-btn" type="button">현금 잔액 저장</button>
+              <p id="cashFormHint" class="form-hint" role="status"></p>
+            </div>
+
+            <div class="asset-form-divider"></div>
+
+            <div class="panel-title-row compact-title-row">
               <div><p class="eyebrow">New account</p><h2>새 계좌 추가</h2></div>
               <span class="section-icon">＋</span>
             </div>
-            <div class="stack-form">
+            <div class="stack-form asset-form-block">
               <label class="field"><span>계좌 이름</span><input id="accountNameInput" type="text" placeholder="예: 생활비 통장" maxlength="24" /></label>
               <label class="field"><span>은행</span><select id="accountBankInput"></select></label>
-              <label class="field"><span>기본 잔액</span><div class="amount-input-wrap"><input id="accountBalanceInput" type="number" min="0" step="1000" placeholder="0" /><b>원</b></div></label>
+              <label class="field"><span>현재 잔액</span><div class="amount-input-wrap"><input id="accountBalanceInput" type="number" min="0" step="1000" placeholder="0" /><b>원</b></div></label>
               <label class="check-row">
                 <input id="accountPrimaryInput" type="checkbox" />
-                <span><strong>주 사용 계좌로 설정</strong><small>거래 등록 시 이 계좌가 자동 선택돼요.</small></span>
+                <span><strong>주거래 계좌로 설정</strong><small>거래 등록 시 계좌이체 기본값으로 선택돼요.</small></span>
               </label>
               <button id="addAccountBtn" class="primary-btn" type="button">계좌 추가하기</button>
               <p id="accountFormHint" class="form-hint" role="status"></p>
             </div>
+
+            <div class="asset-form-divider"></div>
+
+            <div class="panel-title-row compact-title-row">
+              <div><p class="eyebrow purple">New card</p><h2>새 카드 추가</h2></div>
+              <span class="section-icon lilac">💳</span>
+            </div>
+            <div class="stack-form asset-form-block">
+              <label class="field"><span>카드 이름</span><input id="cardNameInput" type="text" placeholder="예: 카카오 체크카드" maxlength="24" /></label>
+              <label class="field"><span>카드 종류</span><select id="cardTypeInput"><option value="check">체크카드</option><option value="credit">신용카드</option></select></label>
+              <label id="linkedAccountField" class="field"><span>연결 계좌</span><select id="cardLinkedAccountInput"></select></label>
+              <button id="addCardBtn" class="primary-btn" type="button">카드 추가하기</button>
+              <p id="cardFormHint" class="form-hint" role="status"></p>
+            </div>
           </article>
           <div>
-            <div class="section-heading"><h2>등록된 계좌</h2><p>계좌의 현재 잔액은 거래에 따라 자동으로 반영돼요.</p></div>
-            <div id="accountList" class="account-list"></div>
+            <div class="section-heading"><h2>등록된 자산</h2><p>체크카드는 연결 계좌 바로 옆에 붙어서 보여요. 신용카드는 별도 카드로 관리돼요.</p></div>
+            <div id="accountList" class="account-list asset-board"></div>
           </div>
         </div>
       </section>
@@ -441,7 +485,7 @@
               <select id="categoryTypeInput"></select>
             </label>
             <label class="field"><span>월 예산</span><div class="amount-input-wrap"><input id="categoryBudgetInput" type="number" min="0" step="1000" placeholder="0" /><b>원</b></div></label>
-            <label class="field"><span>연결 계좌</span><select id="categoryAccountInput"></select></label>
+            <label class="field"><span>기본 계좌</span><select id="categoryAccountInput"></select></label>
             <button id="addCategoryBtn" class="primary-btn compact" type="button">추가하기</button>
           </div>
           <p id="categoryFormHint" class="form-hint" role="status"></p>
@@ -480,7 +524,7 @@
             <label class="field"><span>이름</span><input id="recurringNameInput" type="text" placeholder="예: 월급" maxlength="24" /></label>
             <label class="field"><span>금액</span><div class="amount-input-wrap"><input id="recurringAmountInput" type="number" min="0" step="1000" placeholder="0" /><b>원</b></div></label>
             <label class="field"><span>매월 날짜</span><select id="recurringDayInput"></select></label>
-            <label class="field"><span>연결 계좌</span><select id="recurringAccountInput"></select></label>
+            <label class="field"><span>입출금 계좌</span><select id="recurringAccountInput"></select></label>
             <button id="addRecurringBtn" class="primary-btn compact" type="button">일정 추가</button>
           </div>
           <p class="optional-note">월급날을 정하지 않으려면 날짜에서 ‘미정’을 선택할 수 있어요.</p>

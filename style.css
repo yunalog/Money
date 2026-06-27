@@ -4601,3 +4601,228 @@ h2 { font-size: 22px; }
     min-height: 0;
   }
 }
+
+/* Asset settings v2 */
+.asset-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.asset-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 17px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px);
+}
+
+.asset-summary-card > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--green-soft);
+  font-size: 18px;
+}
+
+.asset-summary-card small,
+.asset-summary-card strong {
+  display: block;
+  font-family: "Noto Sans KR", sans-serif;
+}
+
+.asset-summary-card small {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.asset-summary-card strong {
+  font-size: 18px;
+}
+
+.asset-form-divider {
+  height: 1px;
+  margin: 22px 0;
+  background: var(--line);
+}
+
+.compact-title-row {
+  margin-bottom: 16px;
+}
+
+.asset-form-block + .asset-form-block {
+  margin-top: 12px;
+}
+
+.asset-board {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.asset-pair-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.95fr) minmax(260px, 1.05fr);
+  gap: 13px;
+  align-items: stretch;
+}
+
+.asset-pair-row.cash-row {
+  grid-template-columns: minmax(260px, 0.95fr) minmax(260px, 1.05fr);
+}
+
+.cash-card {
+  min-height: 178px;
+  border-color: rgba(72, 118, 95, 0.23);
+  background: linear-gradient(160deg, #ffffff, #f3f8f4);
+}
+
+.linked-card-column {
+  display: grid;
+  gap: 10px;
+}
+
+.asset-card-item,
+.linked-card-empty {
+  min-height: 178px;
+  padding: 19px;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px);
+}
+
+.asset-card-item.check {
+  background: linear-gradient(160deg, #ffffff, #f8f4fa);
+}
+
+.asset-card-item.credit {
+  background: linear-gradient(160deg, #ffffff, #f8faf7);
+}
+
+.asset-card-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 21px;
+}
+
+.asset-card-top > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--purple-soft);
+  font-size: 18px;
+}
+
+.asset-card-top strong,
+.asset-card-top small {
+  display: block;
+  overflow: hidden;
+  font-family: "Noto Sans KR", sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-card-top strong {
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+
+.asset-card-top small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.asset-card-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.asset-card-values > div {
+  min-width: 0;
+  padding: 11px;
+  border-radius: 13px;
+  background: rgba(255,255,255,0.72);
+}
+
+.asset-card-values span,
+.asset-card-values strong {
+  display: block;
+  overflow: hidden;
+  font-family: "Noto Sans KR", sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-card-values span {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.asset-card-values strong {
+  font-size: 13px;
+}
+
+.linked-card-empty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  color: #a3aaa5;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.linked-card-empty span {
+  font-size: 22px;
+}
+
+.linked-card-empty p {
+  margin: 0;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 12px;
+}
+
+.asset-credit-section {
+  margin-top: 6px;
+}
+
+.credit-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.account-cell i {
+  margin-right: 6px;
+  font-style: normal;
+}
+
+@media (max-width: 1180px) {
+  .asset-pair-row,
+  .asset-pair-row.cash-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .asset-summary-grid,
+  .credit-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
