@@ -5,8 +5,47 @@ const TYPE_META = {
   income: { label: "수입", sign: "+", icon: "↙", className: "income" },
   expense: { label: "지출", sign: "−", icon: "↗", className: "expense" },
   saving: { label: "저축", sign: "", icon: "✦", className: "saving" },
+  debt: { label: "부채", sign: "", icon: "◇", className: "debt" },
+  stock: { label: "주식", sign: "", icon: "↗", className: "stock" },
+  realEstate: { label: "부동산", sign: "", icon: "⌂", className: "real-estate" },
   transfer: { label: "계좌이체", sign: "", icon: "⇄", className: "transfer" },
 };
+
+const MANAGEMENT_ITEMS = {
+  income: { label: "수입", desc: "월급, 부수입 등 들어오는 돈", icon: "↙", tone: "mint", type: "income", categoryLabel: "수입" },
+  variableExpense: { label: "변동비", desc: "식비, 교통, 쇼핑 등 매달 달라지는 지출", icon: "↗", tone: "peach", type: "expense", group: "variable", categoryLabel: "변동비" },
+  fixedExpense: { label: "고정비", desc: "월세, 보험, 통신비 등 정기 지출", icon: "⌂", tone: "sky", type: "expense", group: "fixed", categoryLabel: "고정비" },
+  subscription: { label: "구독 서비스", desc: "영상, 음악, 클라우드 등의 정기 결제", icon: "▶", tone: "lilac", type: "expense", group: "subscription", categoryLabel: "구독" },
+  saving: { label: "저축", desc: "적금, 비상금, 목표 저축", icon: "✦", tone: "sage", type: "saving", categoryLabel: "저축" },
+  debt: { label: "부채", desc: "대출, 카드값과 상환 내역", icon: "◇", tone: "rose", type: "debt", categoryLabel: "부채" },
+  stock: { label: "주식", desc: "국내외 주식과 ETF 투자", icon: "↗", tone: "yellow", type: "stock", categoryLabel: "주식" },
+  realEstate: { label: "부동산", desc: "보증금, 주택 등 부동산 자산", icon: "⌂", tone: "sky", type: "realEstate", categoryLabel: "부동산" },
+};
+
+const MANAGEMENT_PRESETS = {
+  starter: {
+    income: true,
+    variableExpense: true,
+    fixedExpense: true,
+    subscription: true,
+    saving: true,
+    debt: false,
+    stock: false,
+    realEstate: false,
+  },
+  full: {
+    income: true,
+    variableExpense: true,
+    fixedExpense: true,
+    subscription: true,
+    saving: true,
+    debt: true,
+    stock: true,
+    realEstate: true,
+  },
+};
+
+const TRANSACTION_TYPE_ORDER = ["expense", "income", "saving", "debt", "stock", "realEstate", "transfer"];
 
 const RECURRING_META = {
   income: { label: "수입", target: "recurringIncomeList" },
@@ -39,16 +78,23 @@ function createDefaultState() {
   ];
 
   const categories = [
-    { id: "cat-salary", name: "월급", type: "income", budget: 0, accountId: "acc-salary", icon: "💼", color: "sage" },
-    { id: "cat-extra", name: "부수입", type: "income", budget: 0, accountId: "acc-salary", icon: "✦", color: "sky" },
-    { id: "cat-food", name: "식비", type: "expense", budget: 450000, accountId: "acc-daily", icon: "🍚", color: "peach" },
-    { id: "cat-traffic", name: "교통", type: "expense", budget: 120000, accountId: "acc-daily", icon: "🚌", color: "sky" },
-    { id: "cat-house", name: "주거", type: "expense", budget: 780000, accountId: "acc-salary", icon: "🏠", color: "sage" },
-    { id: "cat-life", name: "생활", type: "expense", budget: 250000, accountId: "acc-daily", icon: "🛍", color: "yellow" },
-    { id: "cat-culture", name: "문화·여가", type: "expense", budget: 180000, accountId: "acc-daily", icon: "🎬", color: "lilac" },
-    { id: "cat-health", name: "건강", type: "expense", budget: 150000, accountId: "acc-daily", icon: "🏥", color: "rose" },
-    { id: "cat-saving", name: "정기 저축", type: "saving", budget: 700000, accountId: "acc-saving", icon: "💰", color: "lilac" },
-    { id: "cat-emergency", name: "비상금", type: "saving", budget: 200000, accountId: "acc-saving", icon: "✦", color: "sage" },
+    { id: "cat-salary", name: "월급", type: "income", group: "", budget: 0, accountId: "acc-salary", icon: "💼", color: "sage" },
+    { id: "cat-extra", name: "부수입", type: "income", group: "", budget: 0, accountId: "acc-salary", icon: "✦", color: "sky" },
+    { id: "cat-food", name: "식비", type: "expense", group: "variable", budget: 450000, accountId: "acc-daily", icon: "🍚", color: "peach" },
+    { id: "cat-traffic", name: "교통", type: "expense", group: "variable", budget: 120000, accountId: "acc-daily", icon: "🚌", color: "sky" },
+    { id: "cat-house", name: "주거", type: "expense", group: "fixed", budget: 780000, accountId: "acc-salary", icon: "🏠", color: "sage" },
+    { id: "cat-life", name: "생활", type: "expense", group: "variable", budget: 250000, accountId: "acc-daily", icon: "🛍", color: "yellow" },
+    { id: "cat-culture", name: "문화·여가", type: "expense", group: "variable", budget: 180000, accountId: "acc-daily", icon: "🎬", color: "lilac" },
+    { id: "cat-health", name: "건강", type: "expense", group: "variable", budget: 150000, accountId: "acc-daily", icon: "🏥", color: "rose" },
+    { id: "cat-subscription", name: "구독 서비스", type: "expense", group: "subscription", budget: 50000, accountId: "acc-daily", icon: "▶", color: "lilac" },
+    { id: "cat-saving", name: "정기 저축", type: "saving", group: "", budget: 700000, accountId: "acc-saving", icon: "💰", color: "lilac" },
+    { id: "cat-emergency", name: "비상금", type: "saving", group: "", budget: 200000, accountId: "acc-saving", icon: "✦", color: "sage" },
+    { id: "cat-loan", name: "대출 상환", type: "debt", group: "", budget: 0, accountId: "acc-salary", icon: "🏦", color: "rose" },
+    { id: "cat-card-debt", name: "카드값", type: "debt", group: "", budget: 0, accountId: "acc-salary", icon: "💳", color: "peach" },
+    { id: "cat-domestic-stock", name: "국내 주식", type: "stock", group: "", budget: 0, accountId: "acc-saving", icon: "📈", color: "yellow" },
+    { id: "cat-etf", name: "ETF", type: "stock", group: "", budget: 0, accountId: "acc-saving", icon: "▥", color: "sky" },
+    { id: "cat-deposit", name: "전월세 보증금", type: "realEstate", group: "", budget: 0, accountId: "acc-saving", icon: "🏠", color: "sage" },
+    { id: "cat-property", name: "보유 부동산", type: "realEstate", group: "", budget: 0, accountId: "acc-saving", icon: "🏢", color: "sky" },
   ];
 
   const transactions = [
@@ -74,6 +120,7 @@ function createDefaultState() {
   ];
 
   return {
+    schemaVersion: 4,
     accounts,
     categories,
     transactions,
@@ -86,6 +133,8 @@ function createDefaultState() {
       amountDisplay: "full",
       startPage: "dashboard",
       reduceMotion: false,
+      managementPreset: "starter",
+      enabledManagement: { ...MANAGEMENT_PRESETS.starter },
     },
   };
 }
@@ -96,14 +145,37 @@ function loadState() {
     if (!saved) return createDefaultState();
     const parsed = JSON.parse(saved);
     const defaults = createDefaultState();
+    const parsedCategories = Array.isArray(parsed.categories) ? parsed.categories : defaults.categories;
+    const migratedCategories = parsed.schemaVersion === 4
+      ? parsedCategories
+      : [
+          ...parsedCategories,
+          ...defaults.categories.filter((category) => !parsedCategories.some((savedCategory) => savedCategory.id === category.id)),
+        ];
+    migratedCategories.forEach((category) => {
+      if (category.type === "expense" && !category.group) {
+        category.group = category.id === "cat-house" ? "fixed" : "variable";
+      }
+      category.group ||= "";
+      category.enabled = category.enabled !== false;
+    });
+
     return {
       ...defaults,
       ...parsed,
+      schemaVersion: 4,
       accounts: Array.isArray(parsed.accounts) ? parsed.accounts : defaults.accounts,
-      categories: Array.isArray(parsed.categories) ? parsed.categories : defaults.categories,
+      categories: migratedCategories,
       transactions: Array.isArray(parsed.transactions) ? parsed.transactions : defaults.transactions,
       recurring: Array.isArray(parsed.recurring) ? parsed.recurring : defaults.recurring,
-      settings: { ...defaults.settings, ...(parsed.settings || {}) },
+      settings: {
+        ...defaults.settings,
+        ...(parsed.settings || {}),
+        enabledManagement: {
+          ...defaults.settings.enabledManagement,
+          ...(parsed.settings?.enabledManagement || {}),
+        },
+      },
     };
   } catch {
     return createDefaultState();
@@ -158,6 +230,47 @@ function getCategory(id) {
   return state.categories.find((category) => category.id === id);
 }
 
+function categoryManagementKey(category) {
+  if (!category) return "";
+  if (category.type === "expense") {
+    if (category.group === "fixed") return "fixedExpense";
+    if (category.group === "subscription") return "subscription";
+    return "variableExpense";
+  }
+  return category.type;
+}
+
+function isManagementEnabled(key) {
+  return Boolean(state.settings.enabledManagement?.[key]);
+}
+
+function isCategoryEnabled(category) {
+  return category?.enabled !== false && isManagementEnabled(categoryManagementKey(category));
+}
+
+function enabledTransactionTypes() {
+  const types = new Set(["transfer"]);
+  Object.entries(MANAGEMENT_ITEMS).forEach(([key, item]) => {
+    if (isManagementEnabled(key)) types.add(item.type);
+  });
+  return TRANSACTION_TYPE_ORDER.filter((type) => types.has(type));
+}
+
+function isTransactionEnabled(transaction) {
+  if (transaction.type === "transfer") return true;
+  const category = getCategory(transaction.categoryId);
+  if (category) return isCategoryEnabled(category);
+  return Object.entries(MANAGEMENT_ITEMS).some(([key, item]) => item.type === transaction.type && isManagementEnabled(key));
+}
+
+function managementLabelForCategory(category) {
+  return MANAGEMENT_ITEMS[categoryManagementKey(category)]?.categoryLabel || TYPE_META[category?.type]?.label || "기타";
+}
+
+function recurringManagementKey(type) {
+  return type === "fixed" ? "fixedExpense" : type;
+}
+
 function monthTransactions(month = viewedMonth) {
   return state.transactions.filter((transaction) => transaction.date.startsWith(month));
 }
@@ -165,6 +278,12 @@ function monthTransactions(month = viewedMonth) {
 function sumByType(type, month = viewedMonth) {
   return monthTransactions(month)
     .filter((transaction) => transaction.type === type)
+    .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+}
+
+function sumVisibleByType(type, month = viewedMonth) {
+  return monthTransactions(month)
+    .filter((transaction) => transaction.type === type && isTransactionEnabled(transaction))
     .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 }
 
@@ -180,7 +299,7 @@ function totalSavings() {
 
 function totalExpenseBudget() {
   return state.categories
-    .filter((category) => category.type === "expense")
+    .filter((category) => category.type === "expense" && isCategoryEnabled(category))
     .reduce((sum, category) => sum + Number(category.budget || 0), 0);
 }
 
@@ -231,9 +350,9 @@ function renderAccountOptions() {
 
 function renderDashboard() {
   const dashboardMonth = TODAY.toISOString().slice(0, 7);
-  const income = sumByType("income", dashboardMonth);
-  const expense = sumByType("expense", dashboardMonth);
-  const savings = sumByType("saving", dashboardMonth);
+  const income = sumVisibleByType("income", dashboardMonth);
+  const expense = sumVisibleByType("expense", dashboardMonth);
+  const savings = sumVisibleByType("saving", dashboardMonth);
   const budget = totalExpenseBudget();
   const budgetRate = budget ? Math.round((expense / budget) * 100) : 0;
   const savingRate = income ? Math.round((savings / income) * 100) : 0;
@@ -265,11 +384,13 @@ function renderDashboard() {
   renderRecentTransactions();
   renderUpcoming();
   applyDashboardVisibility();
+  applyManagementVisibility();
 }
 
 function renderRecentTransactions() {
   const target = document.getElementById("recentTransactions");
   const items = [...state.transactions]
+    .filter(isTransactionEnabled)
     .sort((a, b) => b.date.localeCompare(a.date) || Number(b.createdAt || 0) - Number(a.createdAt || 0))
     .slice(0, 5);
 
@@ -282,7 +403,7 @@ function renderRecentTransactions() {
     const category = getCategory(item.categoryId);
     const account = getAccount(item.accountId);
     const type = TYPE_META[item.type] || TYPE_META.expense;
-    const amountClass = item.type === "income" ? "income" : item.type === "expense" ? "expense" : "saving";
+    const amountClass = type.className;
     const sign = item.type === "income" ? "+" : item.type === "expense" ? "−" : "";
     return `
       <div class="compact-item">
@@ -304,7 +425,7 @@ function renderUpcoming() {
   const target = document.getElementById("upcomingList");
   const todayDay = TODAY.getDate();
   const upcoming = state.recurring
-    .filter((item) => item.active && Number(item.day || 0) >= todayDay)
+    .filter((item) => isManagementEnabled(recurringManagementKey(item.type)) && item.active && Number(item.day || 0) >= todayDay)
     .sort((a, b) => Number(a.day || 99) - Number(b.day || 99))
     .slice(0, 4);
 
@@ -323,13 +444,25 @@ function renderUpcoming() {
 }
 
 function renderTransactionComposer() {
-  document.querySelectorAll("#transactionTypeSegment button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.type === transactionType);
-  });
+  const availableTypes = enabledTransactionTypes();
+  if (!availableTypes.includes(transactionType)) {
+    transactionType = availableTypes.find((type) => type !== "transfer") || "transfer";
+  }
+  if (transactionFilter !== "all" && !availableTypes.includes(transactionFilter)) transactionFilter = "all";
+
+  document.getElementById("transactionTypeSegment").innerHTML = availableTypes.map((type) => {
+    const meta = TYPE_META[type];
+    return `<button class="${type === transactionType ? "active" : ""}" type="button" data-type="${escapeHtml(type)}"><span>${escapeHtml(meta.icon)}</span> ${escapeHtml(meta.label)}</button>`;
+  }).join("");
+
+  document.getElementById("transactionFilters").innerHTML = [
+    `<button class="${transactionFilter === "all" ? "active" : ""}" type="button" data-filter="all">전체</button>`,
+    ...availableTypes.map((type) => `<button class="${transactionFilter === type ? "active" : ""}" type="button" data-filter="${escapeHtml(type)}">${escapeHtml(TYPE_META[type].label)}</button>`),
+  ].join("");
 
   const categoryInput = document.getElementById("transactionCategoryInput");
   const currentCategory = categoryInput.value;
-  const matchingCategories = state.categories.filter((category) => category.type === transactionType);
+  const matchingCategories = state.categories.filter((category) => category.type === transactionType && isCategoryEnabled(category));
 
   if (transactionType === "transfer") {
     categoryInput.innerHTML = `<option value="">내 계좌 간 이동</option>`;
@@ -337,7 +470,10 @@ function renderTransactionComposer() {
   } else {
     categoryInput.disabled = false;
     categoryInput.innerHTML = matchingCategories.length
-      ? matchingCategories.map((category) => optionHtml(category.id, category.name)).join("")
+      ? matchingCategories.map((category) => optionHtml(
+          category.id,
+          category.type === "expense" ? `${category.name} · ${managementLabelForCategory(category)}` : category.name,
+        )).join("")
       : `<option value="">카테고리를 먼저 추가해주세요</option>`;
     if (matchingCategories.some((category) => category.id === currentCategory)) categoryInput.value = currentCategory;
   }
@@ -357,12 +493,13 @@ function syncAccountFromCategory() {
 function renderTransactionHistory() {
   const target = document.getElementById("transactionHistory");
   const list = monthTransactions(viewedMonth)
+    .filter(isTransactionEnabled)
     .filter((item) => transactionFilter === "all" || item.type === transactionFilter)
     .sort((a, b) => b.date.localeCompare(a.date) || Number(b.createdAt || 0) - Number(a.createdAt || 0));
 
-  const income = sumByType("income", viewedMonth);
-  const expenses = sumByType("expense", viewedMonth);
-  const savings = sumByType("saving", viewedMonth);
+  const income = sumVisibleByType("income", viewedMonth);
+  const expenses = sumVisibleByType("expense", viewedMonth);
+  const savings = sumVisibleByType("saving", viewedMonth);
   document.getElementById("transactionMonthLabel").textContent = formatMonth(viewedMonth);
   document.getElementById("monthNetTotal").textContent = formatSignedWon(income - expenses - savings);
 
@@ -402,7 +539,7 @@ function transactionRowHtml(item) {
   const account = getAccount(item.accountId);
   const targetAccount = getAccount(item.targetAccountId);
   const meta = TYPE_META[item.type] || TYPE_META.expense;
-  const sign = item.type === "income" ? "+" : item.type === "expense" ? "−" : "";
+  const sign = meta.sign || "";
   const transferLabel = item.type === "transfer" && targetAccount ? ` → ${targetAccount.name}` : "";
   return `
     <div class="transaction-row">
@@ -566,12 +703,28 @@ function removeAccount(id) {
 }
 
 function renderCategories() {
-  const items = state.categories.filter((category) => categoryFilter === "all" || category.type === categoryFilter);
+  const enabledKeys = Object.keys(MANAGEMENT_ITEMS).filter(isManagementEnabled);
+  if (categoryFilter !== "all" && !enabledKeys.includes(categoryFilter)) categoryFilter = "all";
+
+  const categoryTypeInput = document.getElementById("categoryTypeInput");
+  const currentTypeOption = categoryTypeInput.value;
+  categoryTypeInput.innerHTML = enabledKeys.length
+    ? enabledKeys.map((key) => optionHtml(key, MANAGEMENT_ITEMS[key].categoryLabel)).join("")
+    : `<option value="">설정에서 관리 항목을 먼저 선택해주세요</option>`;
+  if (enabledKeys.includes(currentTypeOption)) categoryTypeInput.value = currentTypeOption;
+
+  document.getElementById("categoryTabs").innerHTML = [
+    `<button class="${categoryFilter === "all" ? "active" : ""}" type="button" data-category-filter="all">전체</button>`,
+    ...enabledKeys.map((key) => `<button class="${categoryFilter === key ? "active" : ""}" type="button" data-category-filter="${escapeHtml(key)}">${escapeHtml(MANAGEMENT_ITEMS[key].categoryLabel)}</button>`),
+  ].join("");
+
+  const visibleCategories = state.categories.filter(isCategoryEnabled);
+  const items = visibleCategories.filter((category) => categoryFilter === "all" || categoryManagementKey(category) === categoryFilter);
   const target = document.getElementById("categoryList");
-  const expense = sumByType("expense", TODAY.toISOString().slice(0, 7));
+  const expense = sumVisibleByType("expense", TODAY.toISOString().slice(0, 7));
   const budget = totalExpenseBudget();
 
-  document.getElementById("categoryCount").textContent = state.categories.length;
+  document.getElementById("categoryCount").textContent = visibleCategories.length;
   document.getElementById("categoryBudgetTotal").textContent = formatWon(budget);
   document.getElementById("categorySpentTotal").textContent = formatWon(expense);
   document.getElementById("categoryRemainingTotal").textContent = formatWon(Math.max(budget - expense, 0));
@@ -590,7 +743,7 @@ function renderCategories() {
       <article class="category-card">
         <div class="category-card-top">
           <span class="category-large ${escapeHtml(category.color)}">${escapeHtml(category.icon)}</span>
-          <div><span class="type-label ${escapeHtml(category.type)}">${escapeHtml(TYPE_META[category.type]?.label)}</span><h3>${escapeHtml(category.name)}</h3></div>
+          <div><span class="type-label ${escapeHtml(category.type)}">${escapeHtml(managementLabelForCategory(category))}</span><h3>${escapeHtml(category.name)}</h3></div>
           <button class="more-delete" type="button" data-delete-category="${escapeHtml(category.id)}" aria-label="${escapeHtml(category.name)} 삭제">×</button>
         </div>
         <div class="category-card-body">
@@ -611,15 +764,16 @@ function renderCategories() {
 
 function addCategory() {
   const name = document.getElementById("categoryNameInput").value.trim();
-  const type = document.getElementById("categoryTypeInput").value;
+  const managementKey = document.getElementById("categoryTypeInput").value;
+  const managementItem = MANAGEMENT_ITEMS[managementKey];
   const budget = Number(document.getElementById("categoryBudgetInput").value || 0);
   const accountId = document.getElementById("categoryAccountInput").value;
 
-  if (!name || budget < 0) {
+  if (!name || !managementItem || !isManagementEnabled(managementKey) || budget < 0) {
     setHint("categoryFormHint", "카테고리 이름과 올바른 예산을 입력해주세요.", true);
     return;
   }
-  if (state.categories.some((category) => category.type === type && category.name === name)) {
+  if (state.categories.some((category) => categoryManagementKey(category) === managementKey && category.name === name)) {
     setHint("categoryFormHint", "같은 종류에 이미 같은 이름의 카테고리가 있어요.", true);
     return;
   }
@@ -627,9 +781,11 @@ function addCategory() {
   state.categories.push({
     id: uid("cat"),
     name,
-    type,
+    type: managementItem.type,
+    group: managementItem.group || "",
     budget,
     accountId,
+    enabled: true,
     icon: CATEGORY_ICONS[state.categories.length % CATEGORY_ICONS.length],
     color: CATEGORY_COLORS[state.categories.length % CATEGORY_COLORS.length],
   });
@@ -661,7 +817,10 @@ function updateCategorySetting(id, field, value) {
 }
 
 function renderRecurring() {
-  document.getElementById("recurringCount").textContent = state.recurring.length;
+  const availableTypes = Object.keys(RECURRING_META).filter((type) => isManagementEnabled(recurringManagementKey(type)));
+  if (!availableTypes.includes(recurringType)) recurringType = availableTypes[0] || "income";
+  document.getElementById("recurringCount").textContent = state.recurring.filter((item) => availableTypes.includes(item.type)).length;
+
   Object.entries(RECURRING_META).forEach(([type, meta]) => {
     const target = document.getElementById(meta.target);
     const items = state.recurring
@@ -671,8 +830,13 @@ function renderRecurring() {
   });
 
   document.querySelectorAll("#recurringTypeSegment button").forEach((button) => {
+    button.classList.toggle("hidden", !availableTypes.includes(button.dataset.recurringType));
     button.classList.toggle("active", button.dataset.recurringType === recurringType);
   });
+  document.getElementById("recurringIncomeGroup").classList.toggle("hidden", !availableTypes.includes("income"));
+  document.getElementById("recurringFixedGroup").classList.toggle("hidden", !availableTypes.includes("fixed"));
+  document.getElementById("recurringSubscriptionGroup").classList.toggle("hidden", !availableTypes.includes("subscription"));
+  document.getElementById("addRecurringBtn").disabled = availableTypes.length === 0;
 }
 
 function recurringItemHtml(item) {
@@ -697,6 +861,10 @@ function addRecurring() {
   const dayValue = document.getElementById("recurringDayInput").value;
   const accountId = document.getElementById("recurringAccountInput").value;
 
+  if (!isManagementEnabled(recurringManagementKey(recurringType))) {
+    setHint("recurringFormHint", "설정에서 이 관리 항목을 먼저 켜주세요.", true);
+    return;
+  }
   if (!name || !amount || amount <= 0 || !accountId) {
     setHint("recurringFormHint", "이름, 금액과 연결 계좌를 입력해주세요.", true);
     return;
@@ -739,6 +907,7 @@ function toggleRecurring(id, checked) {
 }
 
 function renderSettings() {
+  renderManagementItems();
   document.querySelectorAll("[data-setting]").forEach((input) => {
     input.checked = Boolean(state.settings[input.dataset.setting]);
   });
@@ -746,6 +915,45 @@ function renderSettings() {
   document.getElementById("startPageSetting").value = state.settings.startPage;
   document.getElementById("reduceMotionSetting").checked = state.settings.reduceMotion;
   document.body.classList.toggle("reduce-motion", state.settings.reduceMotion);
+}
+
+function renderManagementItems() {
+  const target = document.getElementById("managementItems");
+  target.innerHTML = Object.entries(MANAGEMENT_ITEMS).map(([key, item]) => {
+    const categories = state.categories.filter((category) => categoryManagementKey(category) === key);
+    const choices = categories.map((category) => `
+      <label class="category-choice ${category.enabled !== false ? "selected" : ""}">
+        <input type="checkbox" data-management-category="${escapeHtml(category.id)}" ${category.enabled !== false ? "checked" : ""} ${isManagementEnabled(key) ? "" : "disabled"} />
+        <span>${escapeHtml(category.name)}</span>
+      </label>
+    `).join("");
+    return `
+      <article class="management-item ${isManagementEnabled(key) ? "enabled" : ""}">
+        <div class="management-item-top">
+          <span class="management-icon ${escapeHtml(item.tone)}">${escapeHtml(item.icon)}</span>
+          <div>
+            <span class="management-kind">${item.type === "expense" ? "지출 하위" : "거래 유형"}</span>
+            <h3>${escapeHtml(item.label)}</h3>
+          </div>
+          <label class="management-toggle" aria-label="${escapeHtml(item.label)} 사용">
+            <input type="checkbox" data-management-key="${escapeHtml(key)}" ${isManagementEnabled(key) ? "checked" : ""} />
+            <i></i>
+          </label>
+        </div>
+        <p>${escapeHtml(item.desc)}</p>
+        <div class="management-category-head"><span>사용할 카테고리</span><b>${categories.filter((category) => category.enabled !== false).length}/${categories.length}</b></div>
+        <div class="management-categories">${choices || "<span class=\"no-category\">카테고리 설정에서 추가할 수 있어요.</span>"}</div>
+      </article>
+    `;
+  }).join("");
+
+  const activePreset = Object.entries(MANAGEMENT_PRESETS).find(([, preset]) =>
+    Object.keys(MANAGEMENT_ITEMS).every((key) => Boolean(preset[key]) === isManagementEnabled(key))
+  )?.[0] || "custom";
+  state.settings.managementPreset = activePreset;
+  document.querySelectorAll("#managementPresets button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.preset === activePreset);
+  });
 }
 
 function applyDashboardVisibility() {
@@ -756,6 +964,17 @@ function applyDashboardVisibility() {
   const bottom = document.querySelector(".dashboard-bottom");
   bottom.classList.toggle("single-column", !state.settings.showRecent || !state.settings.showUpcoming);
   bottom.classList.toggle("hidden", !state.settings.showRecent && !state.settings.showUpcoming);
+}
+
+function applyManagementVisibility() {
+  const hasExpense = ["variableExpense", "fixedExpense", "subscription"].some(isManagementEnabled);
+  const hasSaving = isManagementEnabled("saving");
+  document.getElementById("incomeMetricCard").classList.toggle("hidden", !isManagementEnabled("income"));
+  document.getElementById("expenseMetricCard").classList.toggle("hidden", !hasExpense);
+  document.getElementById("savingsMetricCard").classList.toggle("hidden", !hasSaving);
+  document.getElementById("budgetRatioCard").classList.toggle("hidden", !hasExpense);
+  document.getElementById("savingRatioCard").classList.toggle("hidden", !hasSaving);
+  document.getElementById("ratioSection").classList.toggle("hidden", !state.settings.showRatios || (!hasExpense && !hasSaving));
 }
 
 function emptyState(message) {
@@ -879,6 +1098,36 @@ function bindEvents() {
     }
   });
 
+  document.getElementById("managementItems").addEventListener("change", (event) => {
+    const categoryId = event.target.dataset.managementCategory;
+    if (categoryId) {
+      const category = getCategory(categoryId);
+      if (!category) return;
+      category.enabled = event.target.checked;
+      saveState();
+      renderAll();
+      showToast(`${category.name} 카테고리를 ${event.target.checked ? "사용해요" : "숨겼어요"}.`);
+      return;
+    }
+    const key = event.target.dataset.managementKey;
+    if (!key || !MANAGEMENT_ITEMS[key]) return;
+    state.settings.enabledManagement[key] = event.target.checked;
+    state.settings.managementPreset = "custom";
+    saveState();
+    renderAll();
+    showToast(`${MANAGEMENT_ITEMS[key].label} 항목을 ${event.target.checked ? "표시해요" : "숨겼어요"}.`);
+  });
+  document.getElementById("managementPresets").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-preset]");
+    const preset = MANAGEMENT_PRESETS[button?.dataset.preset];
+    if (!preset) return;
+    state.settings.enabledManagement = { ...preset };
+    state.settings.managementPreset = button.dataset.preset;
+    saveState();
+    renderAll();
+    showToast(button.dataset.preset === "starter" ? "간편 관리 항목을 적용했어요." : "전체 자산 관리 항목을 적용했어요.");
+  });
+
   document.getElementById("dashboardToggles").addEventListener("change", (event) => {
     if (!event.target.dataset.setting) return;
     state.settings[event.target.dataset.setting] = event.target.checked;
@@ -926,6 +1175,7 @@ function init() {
   document.getElementById("accountBankInput").innerHTML = BANKS.map((bank) => optionHtml(bank, bank)).join("");
   document.getElementById("recurringDayInput").innerHTML = `<option value="">미정 (선택 사항)</option>${Array.from({ length: 31 }, (_, index) => optionHtml(index + 1, `매월 ${index + 1}일`)).join("")}`;
 
+  saveState();
   bindEvents();
   renderAll();
   const hashPage = window.location.hash.slice(1);

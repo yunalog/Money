@@ -74,7 +74,7 @@
             <strong id="totalAsset">0원</strong>
             <small>모든 계좌의 현재 잔액</small>
           </article>
-          <article class="metric-card">
+          <article id="savingsMetricCard" class="metric-card">
             <div class="metric-top">
               <span class="metric-icon lilac">✦</span>
               <span class="metric-trend positive">↑ 8.1%</span>
@@ -83,7 +83,7 @@
             <strong id="totalSavings">0원</strong>
             <small>누적 저축 거래 기준</small>
           </article>
-          <article class="metric-card">
+          <article id="incomeMetricCard" class="metric-card">
             <div class="metric-top">
               <span class="metric-icon mint">↙</span>
               <span class="metric-trend">이번 달</span>
@@ -92,7 +92,7 @@
             <strong id="monthlyIncome">0원</strong>
             <small id="incomeCompare">등록된 수입 합계</small>
           </article>
-          <article class="metric-card">
+          <article id="expenseMetricCard" class="metric-card">
             <div class="metric-top">
               <span class="metric-icon coral">↗</span>
               <span class="metric-trend">이번 달</span>
@@ -104,7 +104,7 @@
         </div>
 
         <div id="ratioSection" class="ratio-grid">
-          <article class="panel ratio-card">
+          <article id="budgetRatioCard" class="panel ratio-card">
             <div class="panel-title-row">
               <div>
                 <p class="eyebrow">Budget</p>
@@ -127,7 +127,7 @@
             </div>
           </article>
 
-          <article class="panel ratio-card">
+          <article id="savingRatioCard" class="panel ratio-card">
             <div class="panel-title-row">
               <div>
                 <p class="eyebrow purple">Savings</p>
@@ -199,12 +199,7 @@
             </div>
           </div>
 
-          <div class="type-segment" id="transactionTypeSegment">
-            <button class="active" type="button" data-type="expense"><span>↗</span> 지출</button>
-            <button type="button" data-type="income"><span>↙</span> 수입</button>
-            <button type="button" data-type="saving"><span>✦</span> 저축</button>
-            <button type="button" data-type="transfer"><span>⇄</span> 계좌이체</button>
-          </div>
+          <div class="type-segment" id="transactionTypeSegment"></div>
 
           <div class="composer-fields">
             <label class="field date-field">
@@ -242,13 +237,7 @@
         </article>
 
         <div class="list-toolbar">
-          <div class="filter-chips" id="transactionFilters">
-            <button class="active" type="button" data-filter="all">전체</button>
-            <button type="button" data-filter="income">수입</button>
-            <button type="button" data-filter="expense">지출</button>
-            <button type="button" data-filter="saving">저축</button>
-            <button type="button" data-filter="transfer">계좌이체</button>
-          </div>
+          <div class="filter-chips" id="transactionFilters"></div>
           <div class="month-total"><span>이번 달 흐름</span><strong id="monthNetTotal">0원</strong></div>
         </div>
 
@@ -307,11 +296,7 @@
           <div class="inline-form category-create-form">
             <label class="field"><span>이름</span><input id="categoryNameInput" type="text" placeholder="예: 반려동물" maxlength="18" /></label>
             <label class="field"><span>거래 종류</span>
-              <select id="categoryTypeInput">
-                <option value="expense">지출</option>
-                <option value="income">수입</option>
-                <option value="saving">저축</option>
-              </select>
+              <select id="categoryTypeInput"></select>
             </label>
             <label class="field"><span>월 예산</span><div class="amount-input-wrap"><input id="categoryBudgetInput" type="number" min="0" step="1000" placeholder="0" /><b>원</b></div></label>
             <label class="field"><span>연결 계좌</span><select id="categoryAccountInput"></select></label>
@@ -326,12 +311,7 @@
           <div><span>남은 예산</span><strong id="categoryRemainingTotal">0원</strong></div>
         </div>
 
-        <div class="category-tabs" id="categoryTabs">
-          <button class="active" type="button" data-category-filter="all">전체</button>
-          <button type="button" data-category-filter="expense">지출</button>
-          <button type="button" data-category-filter="income">수입</button>
-          <button type="button" data-category-filter="saving">저축</button>
-        </div>
+        <div class="category-tabs" id="categoryTabs"></div>
         <div id="categoryList" class="category-card-grid"></div>
       </section>
 
@@ -366,15 +346,15 @@
         </article>
 
         <div class="recurring-columns">
-          <article class="recurring-group income-group">
+          <article id="recurringIncomeGroup" class="recurring-group income-group">
             <div class="group-title"><span class="group-icon mint">↙</span><div><h2>수입</h2><p>월급과 정기 수입</p></div></div>
             <div id="recurringIncomeList" class="recurring-list"></div>
           </article>
-          <article class="recurring-group fixed-group">
+          <article id="recurringFixedGroup" class="recurring-group fixed-group">
             <div class="group-title"><span class="group-icon coral">⌂</span><div><h2>고정비</h2><p>월세, 보험, 통신비 등</p></div></div>
             <div id="recurringFixedList" class="recurring-list"></div>
           </article>
-          <article class="recurring-group subscription-group">
+          <article id="recurringSubscriptionGroup" class="recurring-group subscription-group">
             <div class="group-title"><span class="group-icon lilac">▶</span><div><h2>구독 서비스</h2><p>매달 결제되는 서비스</p></div></div>
             <div id="recurringSubscriptionList" class="recurring-list"></div>
           </article>
@@ -391,6 +371,25 @@
         </div>
 
         <div class="preferences-layout">
+          <article class="panel management-card">
+            <div class="management-head">
+              <div>
+                <p class="eyebrow">My money setup</p>
+                <h2>관리 항목</h2>
+                <p>내가 쓰는 항목만 선택하세요. 거래 유형과 카테고리 설정이 함께 정리됩니다.</p>
+              </div>
+              <div class="preset-buttons" id="managementPresets">
+                <button class="active" type="button" data-preset="starter">간편 관리</button>
+                <button type="button" data-preset="full">전체 자산 관리</button>
+              </div>
+            </div>
+            <div id="managementItems" class="management-grid"></div>
+            <div class="management-note">
+              <span>i</span>
+              <p>항목을 꺼도 기존 거래와 카테고리는 삭제되지 않아요. 필요할 때 다시 켜면 그대로 나타납니다.</p>
+            </div>
+          </article>
+
           <article class="panel preference-card">
             <div class="panel-title-row">
               <div><p class="eyebrow">Dashboard</p><h2>대시보드에 표시</h2></div>
