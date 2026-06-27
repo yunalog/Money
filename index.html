@@ -379,7 +379,7 @@
             <label class="field amount-field">
               <span>금액</span>
               <div class="amount-input-wrap">
-                <input id="transactionAmountInput" type="text" inputmode="numeric" autocomplete="off" placeholder="0"  data-money-input />
+                <input id="transactionAmountInput" class="money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0" />
                 <b>원</b>
               </div>
               <p id="transactionAmountPreview" class="amount-korean-preview" aria-live="polite"></p>
@@ -422,7 +422,7 @@
               <span class="section-icon">💵</span>
             </div>
             <div class="stack-form asset-form-block">
-              <label class="field"><span>현금 잔액</span><div class="amount-input-wrap"><input autocomplete="off" inputmode="numeric" id="cashBalanceInput" type="text" placeholder="0"  data-money-input /><b>원</b></div></label>
+              <label class="field"><span>현금 잔액</span><div class="amount-input-wrap"><input id="cashBalanceInput" class="money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0" /><b>원</b></div></label>
               <button id="saveCashBtn" class="primary-btn" type="button">현금 잔액 저장</button>
               <p id="cashFormHint" class="form-hint" role="status"></p>
             </div>
@@ -436,7 +436,7 @@
             <div class="stack-form asset-form-block">
               <label class="field"><span>계좌 이름</span><input id="accountNameInput" type="text" placeholder="예: 생활비 통장" maxlength="24" /></label>
               <label class="field"><span>은행</span><select id="accountBankInput"></select></label>
-              <label class="field"><span>현재 잔액</span><div class="amount-input-wrap"><input autocomplete="off" inputmode="numeric" id="accountBalanceInput" type="text" placeholder="0"  data-money-input /><b>원</b></div></label>
+              <label class="field"><span>현재 잔액</span><div class="amount-input-wrap"><input id="accountBalanceInput" class="money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0" /><b>원</b></div></label>
               <label class="check-row">
                 <input id="accountPrimaryInput" type="checkbox" />
                 <span><strong>주거래 계좌로 설정</strong><small>거래 등록 시 계좌이체 기본값으로 선택돼요.</small></span>
@@ -485,7 +485,7 @@
             <label class="field"><span>거래 종류</span>
               <select id="categoryTypeInput"></select>
             </label>
-            <label class="field"><span>월 예산</span><div class="amount-input-wrap"><input autocomplete="off" inputmode="numeric" id="categoryBudgetInput" type="text" placeholder="0"  data-money-input /><b>원</b></div></label>
+            <label class="field"><span>월 예산</span><div class="amount-input-wrap"><input id="categoryBudgetInput" class="money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0" /><b>원</b></div></label>
             <label class="field"><span>기본 계좌</span><select id="categoryAccountInput"></select></label>
             <button id="addCategoryBtn" class="primary-btn compact" type="button">추가하기</button>
           </div>
@@ -523,7 +523,7 @@
           </div>
           <div class="inline-form recurring-create-form">
             <label class="field"><span>이름</span><input id="recurringNameInput" type="text" placeholder="예: 월급" maxlength="24" /></label>
-            <label class="field"><span>금액</span><div class="amount-input-wrap"><input autocomplete="off" inputmode="numeric" id="recurringAmountInput" type="text" placeholder="0"  data-money-input /><b>원</b></div></label>
+            <label class="field"><span>금액</span><div class="amount-input-wrap"><input id="recurringAmountInput" class="money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0" /><b>원</b></div></label>
             <label class="field"><span>매월 날짜</span><select id="recurringDayInput"></select></label>
             <label class="field"><span>입출금 계좌</span><select id="recurringAccountInput"></select></label>
             <button id="addRecurringBtn" class="primary-btn compact" type="button">일정 추가</button>
@@ -612,7 +612,7 @@
               </label>
               <label class="field"><span>목표 저축 금액</span>
                 <div class="amount-input-wrap">
-                  <input autocomplete="off" inputmode="numeric" id="targetSavingSetting" type="text" placeholder="예: 1000000"  data-money-input />
+                  <input id="targetSavingSetting" class="money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 1,000,000" />
                   <b>원</b>
                 </div>
               </label>
