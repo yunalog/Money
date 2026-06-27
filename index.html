@@ -243,45 +243,25 @@
               </div>
               <div class="ratio-copy">
                 <div><span>이번 달 저축</span><strong id="monthlySavings">0원</strong></div>
-                <div><span>이번 달 수입</span><strong id="savingIncome">0원</strong></div>
+                <div><span id="savingCompareLabel">이번 달 수입</span><strong id="savingIncome">0원</strong></div>
                 <p id="savingGuide">수입의 일부를 차곡차곡 모아보세요.</p>
               </div>
             </div>
           </article>
         </div>
 
-        <section id="monthlySection" class="panel monthly-section">
-          <div class="panel-title-row monthly-section-head">
-            <div>
-              <p class="eyebrow">Monthly flow</p>
-              <h2>월별 비교</h2>
-              <p>비교할 두 달을 고르고 수입·지출·저축과 남은 예산을 확인하세요.</p>
-            </div>
-            <div class="period-compare-controls">
-              <label><span>기준 월</span><input id="monthlyBaseInput" type="month" /></label>
-              <i>vs</i>
-              <label><span>비교 월</span><input id="monthlyCompareInput" type="month" /></label>
-            </div>
-          </div>
-          <span class="monthly-legend">
-            <i class="expense-dot"></i>지출
-            <i class="saving-dot"></i>저축
-            <small>링은 전체 수입 대비 비율입니다.</small>
-          </span>
-          <div id="monthlyCards" class="monthly-card-grid"></div>
-        </section>
-
         <section id="weeklySection" class="panel weekly-section">
           <div class="panel-title-row weekly-section-head">
             <div>
               <p class="eyebrow purple">Weekly budget</p>
               <h2>주별 예산 비교</h2>
-              <p>선택한 달의 주차별 지출과 사용 가능한 예산을 비교하세요.</p>
+              <p>기준 월·주차와 비교 월·주차를 각각 선택해 예산 흐름을 비교하세요.</p>
             </div>
-            <div class="weekly-period-controls">
-              <label><span>확인할 달</span><input id="weeklyMonthInput" type="month" /></label>
+            <div class="weekly-period-controls week-pair-controls">
+              <label><span>기준 월</span><input id="weeklyBaseMonthInput" type="month" /></label>
               <label><span>기준 주</span><select id="weeklyBaseInput"></select></label>
               <i>vs</i>
+              <label><span>비교 월</span><input id="weeklyCompareMonthInput" type="month" /></label>
               <label><span>비교 주</span><select id="weeklyCompareInput"></select></label>
             </div>
           </div>
@@ -290,6 +270,27 @@
             <p>주 예산은 월 예산을 해당 주가 차지하는 일수만큼 나누어 계산해요.</p>
           </div>
           <div id="weeklyCards" class="weekly-card-grid"></div>
+        </section>
+
+        <section id="monthlySection" class="panel monthly-section">
+          <div class="panel-title-row monthly-section-head">
+            <div>
+              <p class="eyebrow">Monthly flow</p>
+              <h2>월별 예산 비교</h2>
+              <p>비교할 세 달을 고르고 수입·지출·저축과 남은 예산을 확인하세요.</p>
+            </div>
+            <div class="period-compare-controls">
+              <label><span>1번째 월</span><input id="monthlyBaseInput" type="month" /></label>
+              <label><span>2번째 월</span><input id="monthlyCompareInput" type="month" /></label>
+              <label><span>3번째 월</span><input id="monthlyThirdInput" type="month" /></label>
+            </div>
+          </div>
+          <span class="monthly-legend">
+            <i class="expense-dot"></i>지출
+            <i class="saving-dot"></i>저축
+            <small>링은 전체 수입 대비 비율입니다.</small>
+          </span>
+          <div id="monthlyCards" class="monthly-card-grid"></div>
         </section>
 
         <div class="dashboard-bottom">
@@ -564,6 +565,18 @@
                   <option value="transactions">거래</option>
                 </select>
               </label>
+              <label class="field"><span>목표 저축 금액</span>
+                <div class="amount-input-wrap">
+                  <input id="targetSavingSetting" type="number" min="0" step="10000" placeholder="예: 1000000" />
+                  <b>원</b>
+                </div>
+              </label>
+              <label class="field"><span>월 저축 목표율</span>
+                <div class="amount-input-wrap percent-input-wrap">
+                  <input id="targetSavingRateSetting" type="number" min="0" max="100" step="1" placeholder="예: 20" />
+                  <b>%</b>
+                </div>
+              </label>
               <label class="check-row soft">
                 <input id="reduceMotionSetting" type="checkbox" />
                 <span><strong>움직임 줄이기</strong><small>화면 전환 애니메이션을 최소화해요.</small></span>
@@ -572,12 +585,25 @@
           </article>
 
           <article class="panel data-card">
-            <div>
+            <div class="data-card-head">
               <p class="eyebrow orange">Local data</p>
-              <h2>데모 데이터</h2>
-              <p>이 화면의 데이터는 현재 브라우저에만 저장됩니다.</p>
+              <h2>데이터 관리</h2>
+              <p>데모 체험, 빈 가계부 시작, 마지막 기록 복원을 선택할 수 있어요.</p>
             </div>
-            <button id="resetDataBtn" class="secondary-btn danger-text" type="button">처음 상태로 되돌리기</button>
+            <div class="data-action-grid">
+              <section class="data-action-item">
+                <div><strong>📊 데모 데이터 불러오기</strong><small>예시 거래와 예산으로 기능을 다시 체험해요.</small></div>
+                <button id="loadDemoDataBtn" class="secondary-btn" type="button">데모 데이터 불러오기</button>
+              </section>
+              <section class="data-action-item danger">
+                <div><strong>🆕 새 가계부 시작</strong><small>현재 기록을 백업하고 0부터 시작해요.</small></div>
+                <button id="startBlankBookBtn" class="secondary-btn danger-text" type="button">새 가계부 시작</button>
+              </section>
+              <section class="data-action-item">
+                <div><strong>💾 마지막 가계부 복원</strong><small>데모나 새 가계부 시작 전의 마지막 기록으로 돌아가요.</small></div>
+                <button id="restoreLastBookBtn" class="secondary-btn" type="button">마지막 가계부 복원</button>
+              </section>
+            </div>
           </article>
         </div>
       </section>
@@ -585,27 +611,7 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <div id="monthlyModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="monthlyModalTitle">
-      <article class="monthly-modal">
-        <div class="monthly-modal-head">
-          <div>
-            <p class="eyebrow">Monthly detail</p>
-            <h2 id="monthlyModalTitle">월 지출 상세</h2>
-          </div>
-          <button id="closeMonthlyModalBtn" class="popover-close" type="button" aria-label="월별 상세 닫기">×</button>
-        </div>
-        <div id="monthlyModalSummary" class="monthly-modal-summary"></div>
-        <div class="monthly-breakdown-head">
-          <div>
-            <h3>카테고리별 지출</h3>
-            <p>이 달에 돈을 쓴 곳을 금액순으로 보여드려요.</p>
-          </div>
-          <strong id="monthlyModalExpenseTotal">0원</strong>
-        </div>
-        <div id="monthlyCategoryBreakdown" class="monthly-category-breakdown"></div>
-      </article>
-    </div>
-  </div>
+
 
   <script src="script.js"></script>
 </body>

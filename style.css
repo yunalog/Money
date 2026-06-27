@@ -3357,11 +3357,9 @@ h3 {
 }
 
 .data-card {
-  display: flex;
+  display: grid;
   grid-column: 1 / -1;
-  align-items: center;
-  justify-content: space-between;
-  gap: 30px;
+  gap: 18px;
 }
 
 .data-card h2 {
@@ -3373,6 +3371,48 @@ h3 {
   color: var(--muted);
   font-family: "Noto Sans KR", sans-serif;
   font-size: 9px;
+}
+
+.data-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.data-action-item {
+  display: grid;
+  align-content: space-between;
+  gap: 16px;
+  min-height: 150px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: #f8faf7;
+}
+
+.data-action-item.danger {
+  background: #fff8f6;
+}
+
+.data-action-item strong,
+.data-action-item small {
+  display: block;
+  font-family: "Noto Sans KR", sans-serif;
+}
+
+.data-action-item strong {
+  margin-bottom: 7px;
+  font-size: 14px;
+}
+
+.data-action-item small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.data-action-item .secondary-btn {
+  width: 100%;
 }
 
 .empty-state {
@@ -4080,5 +4120,476 @@ h2 { font-size: 22px; }
 
   .mini-toggle {
     grid-column: 2;
+  }
+}
+
+/* Inline expandable period cards */
+.monthly-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+.weekly-card-grid {
+  align-items: start;
+}
+
+.period-card-toggle {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border-radius: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.monthly-flow-card.expanded,
+.weekly-flow-card.expanded {
+  border-color: rgba(72, 118, 95, 0.42);
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(41, 57, 48, 0.11);
+}
+
+.monthly-flow-card.expanded,
+.weekly-flow-card.expanded {
+  align-self: start;
+}
+
+.period-expand-label {
+  display: grid;
+  width: 100%;
+  min-height: 34px;
+  margin-top: 12px;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--green-dark);
+  background: var(--green-soft);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.period-inline-detail {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  animation: periodDetailIn 180ms ease both;
+}
+
+@keyframes periodDetailIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.period-detail-head,
+.period-detail-breakdown-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.period-detail-head {
+  margin-bottom: 14px;
+}
+
+.period-detail-head h3 {
+  font-size: 18px;
+}
+
+.period-detail-head > strong {
+  white-space: nowrap;
+}
+
+.period-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 18px;
+}
+
+.period-detail-summary > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 15px;
+  background: #f6f8f5;
+}
+
+.period-detail-summary > div > span {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  font-weight: 800;
+}
+
+.period-detail-summary .income-summary > span { color: var(--green); background: var(--green-soft); }
+.period-detail-summary .expense-summary > span { color: var(--red); background: var(--red-soft); }
+.period-detail-summary .saving-summary > span { color: var(--purple); background: var(--purple-soft); }
+.period-detail-summary .budget-summary > span { color: var(--orange); background: var(--orange-soft); }
+
+.period-detail-summary p {
+  min-width: 0;
+  margin: 0;
+}
+
+.period-detail-summary small,
+.period-detail-summary strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.period-detail-summary small {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 10px;
+}
+
+.period-detail-summary strong {
+  font-size: 14px;
+}
+
+.period-detail-breakdown-head {
+  align-items: flex-start;
+  margin-bottom: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.period-detail-breakdown-head h4 {
+  margin: 0 0 4px;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 15px;
+  letter-spacing: -0.035em;
+}
+
+.period-detail-breakdown-head p {
+  margin: 0;
+  color: var(--muted);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 11px;
+}
+
+.period-detail-category-list {
+  display: grid;
+}
+
+.period-detail-category-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.period-detail-category-row:last-child {
+  border-bottom: 0;
+}
+
+.period-detail-category-copy {
+  min-width: 0;
+}
+
+.period-detail-category-copy > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.period-detail-category-copy p {
+  min-width: 0;
+  margin: 0;
+}
+
+.period-detail-category-copy p:last-child {
+  text-align: right;
+}
+
+.period-detail-category-copy strong,
+.period-detail-category-copy small {
+  display: block;
+  font-family: "Noto Sans KR", sans-serif;
+}
+
+.period-detail-category-copy strong {
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.period-detail-category-copy small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+@media (max-width: 1180px) {
+  .monthly-card-grid {
+    grid-template-columns: repeat(3, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .monthly-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .monthly-flow-card.expanded,
+  .weekly-flow-card.expanded {
+    grid-column: auto;
+  }
+
+  .period-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .monthly-card-grid,
+  .weekly-card-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: visible;
+    margin-right: 0;
+    padding-right: 0;
+  }
+
+  .monthly-flow-card,
+  .weekly-flow-card {
+    flex: initial;
+  }
+
+  .period-detail-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Inline detail summary: text-only layout */
+.period-detail-summary.text-only {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.period-detail-summary.text-only > div {
+  display: block;
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #f8faf7;
+}
+
+.period-detail-summary.text-only > div > span {
+  display: none;
+}
+
+.period-detail-summary.text-only p {
+  display: grid;
+  gap: 5px;
+}
+
+.period-detail-summary.text-only small {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.period-detail-summary.text-only strong {
+  font-size: clamp(16px, 1.6vw, 19px);
+  letter-spacing: -0.04em;
+}
+
+.period-detail-summary.text-only .income-summary strong { color: var(--green); }
+.period-detail-summary.text-only .expense-summary strong { color: var(--red); }
+.period-detail-summary.text-only .saving-summary strong { color: var(--purple); }
+.period-detail-summary.text-only .budget-summary strong { color: var(--orange); }
+
+@media (max-width: 680px) {
+  .period-detail-summary.text-only {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Expanded detail: keep the summary card stable, then let the detail area use the full row */
+.monthly-card-grid > .monthly-flow-card.expanded,
+.weekly-card-grid > .weekly-flow-card.expanded {
+  grid-column: 1 / -1;
+}
+
+.monthly-flow-card.expanded .period-card-toggle,
+.weekly-flow-card.expanded .period-card-toggle {
+  max-width: 370px;
+}
+
+.monthly-flow-card.expanded .period-inline-detail,
+.weekly-flow-card.expanded .period-inline-detail {
+  width: 100%;
+}
+
+.monthly-flow-card.expanded .period-detail-summary,
+.weekly-flow-card.expanded .period-detail-summary {
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+}
+
+.monthly-flow-card.expanded .period-detail-summary strong,
+.weekly-flow-card.expanded .period-detail-summary strong {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+@media (max-width: 900px) {
+  .monthly-flow-card.expanded .period-card-toggle,
+  .weekly-flow-card.expanded .period-card-toggle {
+    max-width: none;
+  }
+
+  .monthly-flow-card.expanded .period-detail-summary,
+  .weekly-flow-card.expanded .period-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .monthly-flow-card.expanded .period-detail-summary,
+  .weekly-flow-card.expanded .period-detail-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Full-width inline detail panel below the selected comparison cards */
+.monthly-card-grid > .monthly-flow-card.expanded,
+.weekly-card-grid > .weekly-flow-card.expanded {
+  grid-column: auto;
+}
+
+.monthly-flow-card.expanded .period-card-toggle,
+.weekly-flow-card.expanded .period-card-toggle {
+  max-width: none;
+}
+
+.period-detail-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 2px;
+  padding: 0;
+  border: 1px solid rgba(72, 118, 95, 0.34);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(41, 57, 48, 0.08);
+  overflow: hidden;
+}
+
+.period-detail-panel .period-inline-detail {
+  margin-top: 0;
+  padding: 22px 24px 24px;
+  border-top: 0;
+}
+
+.period-detail-panel .period-detail-head {
+  padding-top: 0;
+}
+
+.period-detail-panel .period-detail-head h3 {
+  font-size: 21px;
+}
+
+.period-detail-panel .period-detail-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.period-detail-panel .period-detail-summary > div {
+  padding: 13px 14px;
+}
+
+.period-detail-panel .period-detail-summary strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  font-size: 15px;
+}
+
+.period-detail-panel .period-detail-breakdown-head {
+  margin-top: 2px;
+}
+
+.period-detail-panel .period-detail-category-row {
+  padding: 13px 2px;
+}
+
+.period-detail-panel .period-detail-category-copy strong {
+  font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .period-detail-panel .period-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .period-detail-panel {
+    border-radius: 20px;
+  }
+
+  .period-detail-panel .period-inline-detail {
+    padding: 18px;
+  }
+
+  .period-detail-panel .period-detail-head,
+  .period-detail-panel .period-detail-breakdown-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .period-detail-panel .period-detail-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.week-pair-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.week-pair-controls input {
+  width: 132px;
+}
+
+.week-pair-controls select {
+  width: 156px;
+}
+
+@media (max-width: 680px) {
+  .weekly-period-controls.week-pair-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .weekly-period-controls.week-pair-controls label:first-child {
+    grid-column: auto;
+  }
+
+  .weekly-period-controls.week-pair-controls input,
+  .weekly-period-controls.week-pair-controls select {
+    width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .data-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .data-action-item {
+    min-height: 0;
   }
 }

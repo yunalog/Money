@@ -3,6 +3,7 @@ const USER_DATA_PREFIX = "moa-money-user-v1";
 const AUTH_ACCOUNTS_KEY = "moa-auth-accounts-v1";
 const AUTH_SESSION_KEY = "moa-auth-session-v1";
 const LEGACY_MIGRATION_KEY = "moa-legacy-data-owner-v1";
+const USER_BACKUP_PREFIX = "moa-money-backup-v1";
 const TODAY = new Date("2026-06-27T12:00:00+09:00");
 
 const TYPE_META = {
@@ -70,7 +71,8 @@ let viewedMonth = "2026-06";
 let authMode = "login";
 let currentUser = null;
 let state = createDefaultState();
-let lastMonthlyTrigger = null;
+let expandedMonthlyCard = "";
+let expandedWeeklyCard = "";
 
 function uid(prefix) {
   if (window.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
@@ -145,10 +147,17 @@ function createDefaultState() {
       showUpcoming: true,
       amountDisplay: "full",
       startPage: "dashboard",
+      targetSavingAmount: 0,
+      targetSavingRate: 20,
       reduceMotion: false,
       analysisBaseMonth: TODAY.toISOString().slice(0, 7),
       analysisCompareMonth: shiftMonthKey(TODAY.toISOString().slice(0, 7), -1),
+      analysisThirdMonth: shiftMonthKey(TODAY.toISOString().slice(0, 7), -2),
+      monthlyCompareCustomized: false,
+      monthlyThirdCustomized: false,
       analysisWeekMonth: TODAY.toISOString().slice(0, 7),
+      analysisWeekBaseMonth: TODAY.toISOString().slice(0, 7),
+      analysisWeekCompareMonth: shiftMonthKey(TODAY.toISOString().slice(0, 7), -1),
       analysisWeekBase: "",
       analysisWeekCompare: "",
       managementPreset: "starter",
@@ -164,6 +173,61 @@ function normalizeEmail(email) {
 function userDataKey(email) {
   return `${USER_DATA_PREFIX}:${encodeURIComponent(normalizeEmail(email))}`;
 }
+
+function userBackupKey(email) {
+  return `${USER_BACKUP_PREFIX}:${encodeURIComponent(normalizeEmail(email))}`;
+}
+
+function createBlankState(profile = state.profile || currentUser || {}) {
+  const defaults = createDefaultState();
+  return {
+    ...defaults,
+    profile: {
+      name: profile.name || currentUser?.name || "사용자",
+      email: profile.email || currentUser?.email || "",
+    },
+    accounts: [],
+    categories: [],
+    transactions: [],
+    recurring: [],
+    settings: {
+      ...defaults.settings,
+      targetSavingAmount: 0,
+      targetSavingRate: 20,
+      enabledManagement: { ...MANAGEMENT_PRESETS.starter },
+    },
+  };
+}
+
+function backupCurrentState() {
+  if (!currentUser?.email) return;
+  const backup = {
+    savedAt: new Date().toISOString(),
+    state,
+  };
+  localStorage.setItem(userBackupKey(currentUser.email), JSON.stringify(backup));
+}
+
+function readBackupState() {
+  if (!currentUser?.email) return null;
+  try {
+    const raw = localStorage.getItem(userBackupKey(currentUser.email));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.state || null;
+  } catch {
+    return null;
+  }
+}
+
+function resetRuntimeFilters() {
+  transactionType = "expense";
+  transactionFilter = "all";
+  categoryFilter = "all";
+  recurringType = "income";
+  viewedMonth = TODAY.toISOString().slice(0, 7);
+}
+
 
 function loadState(email) {
   try {
@@ -293,7 +357,8 @@ function logout() {
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   currentUser = null;
   state = createDefaultState();
-  closeMonthlyModal();
+  expandedMonthlyCard = "";
+  expandedWeeklyCard = "";
   setProfilePopover(false);
   document.getElementById("app").classList.add("hidden");
   document.getElementById("authPage").classList.remove("hidden");
@@ -551,7 +616,13 @@ function renderDashboard() {
   const savings = sumVisibleByType("saving", dashboardMonth);
   const budget = totalExpenseBudget();
   const budgetRate = budget ? Math.round((expense / budget) * 100) : 0;
-  const savingRate = income ? Math.round((savings / income) * 100) : 0;
+  const targetSavingAmount = Number(state.settings.targetSavingAmount || 0);
+  const targetSavingRate = Number(state.settings.targetSavingRate || 0);
+  const targetSavingByRate = income && targetSavingRate ? Math.round(income * (targetSavingRate / 100)) : 0;
+  const activeSavingTarget = targetSavingAmount || targetSavingByRate;
+  const savingRate = activeSavingTarget
+    ? Math.round((savings / activeSavingTarget) * 100)
+    : income ? Math.round((savings / income) * 100) : 0;
 
   document.getElementById("totalAsset").textContent = formatWon(totalAssets());
   document.getElementById("totalSavings").textContent = formatWon(totalSavings());
@@ -570,12 +641,21 @@ function renderDashboard() {
 
   document.getElementById("savingRate").textContent = `${savingRate}%`;
   document.getElementById("monthlySavings").textContent = formatWon(savings);
-  document.getElementById("savingIncome").textContent = formatWon(income);
+  document.getElementById("savingCompareLabel").textContent = activeSavingTarget
+    ? targetSavingAmount ? "목표 저축액" : `월 목표 ${targetSavingRate}%`
+    : "이번 달 수입";
+  document.getElementById("savingIncome").textContent = formatWon(activeSavingTarget || income);
   document.getElementById("savingDonut").style.setProperty("--progress", `${Math.min(savingRate, 100) * 3.6}deg`);
-  document.getElementById("savingGuide").textContent = savingRate >= 20
-    ? `권장 저축 비율 20%를 ${savingRate - 20}%p 넘었어요.`
-    : `권장 저축 비율 20%까지 ${20 - savingRate}%p 남았어요.`;
-  document.getElementById("savingStatusBadge").textContent = savingRate >= 20 ? "좋은 흐름" : "조금 더";
+  document.getElementById("savingGuide").textContent = activeSavingTarget
+    ? savings >= activeSavingTarget
+      ? `목표보다 ${formatWon(savings - activeSavingTarget)} 더 저축했어요.`
+      : `목표까지 ${formatWon(activeSavingTarget - savings)} 남았어요.`
+    : savingRate >= 20
+      ? `권장 저축 비율 20%를 ${savingRate - 20}%p 넘었어요.`
+      : `권장 저축 비율 20%까지 ${20 - savingRate}%p 남았어요.`;
+  document.getElementById("savingStatusBadge").textContent = activeSavingTarget
+    ? savings >= activeSavingTarget ? "목표 달성" : "목표 진행"
+    : savingRate >= 20 ? "좋은 흐름" : "조금 더";
 
   renderMonthlyCards();
   renderWeeklyCards();
@@ -589,17 +669,51 @@ function renderMonthlyCards() {
   const target = document.getElementById("monthlyCards");
   const currentMonth = TODAY.toISOString().slice(0, 7);
   const baseMonth = state.settings.analysisBaseMonth || currentMonth;
-  const compareMonth = state.settings.analysisCompareMonth || shiftMonthKey(baseMonth, -1);
+  const defaultCompareMonth = shiftMonthKey(baseMonth, -1);
+  const defaultThirdMonth = shiftMonthKey(baseMonth, -2);
+  const compareMonth = state.settings.monthlyCompareCustomized
+    ? (state.settings.analysisCompareMonth || defaultCompareMonth)
+    : defaultCompareMonth;
+  const thirdMonth = state.settings.monthlyThirdCustomized
+    ? (state.settings.analysisThirdMonth || defaultThirdMonth)
+    : defaultThirdMonth;
   state.settings.analysisBaseMonth = baseMonth;
   state.settings.analysisCompareMonth = compareMonth;
+  state.settings.analysisThirdMonth = thirdMonth;
   document.getElementById("monthlyBaseInput").value = baseMonth;
   document.getElementById("monthlyCompareInput").value = compareMonth;
+  document.getElementById("monthlyThirdInput").value = thirdMonth;
 
   const periods = [
-    { month: baseMonth, role: "기준 월" },
-    { month: compareMonth, role: "비교 월" },
+    { month: baseMonth, role: "1번째 월" },
+    { month: compareMonth, role: "2번째 월" },
+    { month: thirdMonth, role: "3번째 월" },
   ].filter((item, index, items) => items.findIndex((candidate) => candidate.month === item.month) === index);
-  target.innerHTML = periods.map((period) => monthlyCardHtml(period.month, period.role)).join("");
+
+  if (expandedMonthlyCard && !periods.some((period) => period.month === expandedMonthlyCard)) {
+    expandedMonthlyCard = "";
+  }
+
+  const detailPeriod = periods.find((period) => period.month === expandedMonthlyCard);
+  const detailHtml = detailPeriod ? monthlyDetailPanelHtml(detailPeriod.month) : "";
+  target.innerHTML = `${periods.map((period) => monthlyCardHtml(period.month, period.role)).join("")}${detailHtml}`;
+}
+
+function monthlyDetailPanelHtml(month) {
+  const flow = monthlyFlow(month);
+  return `
+    <div class="period-detail-panel monthly-detail-panel">
+      ${periodDetailHtml({
+        label: formatMonth(month),
+        income: flow.income,
+        expense: flow.expense,
+        saving: flow.saving,
+        budget: flow.budget,
+        budgetRemaining: flow.budgetRemaining,
+        transactions: monthTransactions(month).filter(isTransactionEnabled),
+      })}
+    </div>
+  `;
 }
 
 function monthlyCardHtml(month, role) {
@@ -612,30 +726,34 @@ function monthlyCardHtml(month, role) {
   const hasData = flow.income + flow.expense + flow.saving > 0;
   const expenseRateLabel = flow.income ? `${flow.expenseRate}%` : "—";
   const savingRateLabel = flow.income ? `${flow.savingRate}%` : "—";
+  const expanded = expandedMonthlyCard === month;
   return `
-    <button class="monthly-flow-card ${month === currentMonth ? "current" : ""} ${hasData ? "" : "empty"}" type="button" data-month-card="${month}" aria-label="${year}년 ${monthNumber}월 상세 보기">
-      <div class="monthly-card-head">
-        <div><span>${year}년</span><strong>${monthNumber}월</strong></div>
-        <em>${escapeHtml(role)}${month === currentMonth ? " · 이번 달" : ""}</em>
-      </div>
-      <div class="monthly-ring" style="--expense-end:${expenseEnd}deg; --saving-end:${savingEnd}deg">
-        <div class="monthly-ring-center">
-          <small>전체 수입</small>
-          <strong>${formatWon(flow.income)}</strong>
+    <article class="monthly-flow-card ${month === currentMonth ? "current" : ""} ${hasData ? "" : "empty"} ${expanded ? "expanded" : ""}">
+      <button class="period-card-toggle" type="button" data-month-card="${month}" aria-expanded="${expanded}" aria-label="${year}년 ${monthNumber}월 상세 보기">
+        <div class="monthly-card-head">
+          <div><span>${year}년</span><strong>${monthNumber}월</strong></div>
+          <em>${escapeHtml(role)}${month === currentMonth ? " · 이번 달" : ""}</em>
         </div>
-      </div>
-      <div class="monthly-flow-values">
-        <div><span><i class="expense-dot"></i>지출 <b>${expenseRateLabel}</b></span><strong>${formatWon(flow.expense)}</strong></div>
-        <div><span><i class="saving-dot"></i>저축 <b>${savingRateLabel}</b></span><strong>${formatWon(flow.saving)}</strong></div>
-      </div>
-      <div class="period-budget-progress">
-        <div><span>월 예산 사용</span><strong>${formatWon(flow.expense)} / ${formatWon(flow.budget)}</strong></div>
-        <div class="progress-track"><i class="${flow.budgetRate >= 100 ? "over" : ""}" style="width:${Math.min(flow.budgetRate, 100)}%"></i></div>
-      </div>
-      <div class="monthly-card-foot ${flow.budgetRemaining < 0 ? "negative" : ""}">
-        <span>남은 월 예산</span><strong>${formatWon(flow.budgetRemaining)}</strong>
-      </div>
-    </button>
+        <div class="monthly-ring" style="--expense-end:${expenseEnd}deg; --saving-end:${savingEnd}deg">
+          <div class="monthly-ring-center">
+            <small>전체 수입</small>
+            <strong>${formatWon(flow.income)}</strong>
+          </div>
+        </div>
+        <div class="monthly-flow-values">
+          <div><span><i class="expense-dot"></i>지출 <b>${expenseRateLabel}</b></span><strong>${formatWon(flow.expense)}</strong></div>
+          <div><span><i class="saving-dot"></i>저축 <b>${savingRateLabel}</b></span><strong>${formatWon(flow.saving)}</strong></div>
+        </div>
+        <div class="period-budget-progress">
+          <div><span>월 예산 사용</span><strong>${formatWon(flow.expense)} / ${formatWon(flow.budget)}</strong></div>
+          <div class="progress-track"><i class="${flow.budgetRate >= 100 ? "over" : ""}" style="width:${Math.min(flow.budgetRate, 100)}%"></i></div>
+        </div>
+        <div class="monthly-card-foot ${flow.budgetRemaining < 0 ? "negative" : ""}">
+          <span>남은 월 예산</span><strong>${formatWon(flow.budgetRemaining)}</strong>
+        </div>
+        <span class="period-expand-label">${expanded ? "상세 닫기" : "상세 보기"}</span>
+      </button>
+    </article>
   `;
 }
 
@@ -692,94 +810,111 @@ function weeklyFlow(month, week) {
   };
 }
 
-function renderWeeklyCards() {
-  const month = state.settings.analysisWeekMonth || TODAY.toISOString().slice(0, 7);
+function getDefaultWeekKey(month, preferredIndex = null) {
   const weeks = getMonthWeeks(month);
   const todayKey = TODAY.toISOString().slice(0, 10);
   const currentWeek = weeks.find((week) => todayKey >= week.startDate && todayKey <= week.endDate);
-  let baseKey = state.settings.analysisWeekBase;
-  if (!weeks.some((week) => week.key === baseKey)) baseKey = currentWeek?.key || weeks.at(-1)?.key;
-  const baseIndex = weeks.findIndex((week) => week.key === baseKey);
-  let compareKey = state.settings.analysisWeekCompare;
-  if (!weeks.some((week) => week.key === compareKey) || compareKey === baseKey) {
-    compareKey = weeks[Math.max(baseIndex - 1, 0)]?.key;
-    if (compareKey === baseKey) compareKey = weeks[Math.min(baseIndex + 1, weeks.length - 1)]?.key;
-  }
+  if (preferredIndex) return weeks.find((week) => week.index === preferredIndex)?.key || weeks.at(-1)?.key || "";
+  if (month === TODAY.toISOString().slice(0, 7) && currentWeek) return currentWeek.key;
+  return weeks.at(-1)?.key || "";
+}
 
-  state.settings.analysisWeekMonth = month;
-  state.settings.analysisWeekBase = baseKey;
-  state.settings.analysisWeekCompare = compareKey;
-  document.getElementById("weeklyMonthInput").value = month;
-  const options = weeks.map((week) => optionHtml(week.key, `${week.label} · ${week.dateLabel}`)).join("");
-  document.getElementById("weeklyBaseInput").innerHTML = options;
-  document.getElementById("weeklyCompareInput").innerHTML = options;
-  document.getElementById("weeklyBaseInput").value = baseKey;
-  document.getElementById("weeklyCompareInput").value = compareKey;
+function weekOptionsHtml(month) {
+  return getMonthWeeks(month).map((week) => optionHtml(week.key, `${week.label} · ${week.dateLabel}`)).join("");
+}
+
+function renderWeeklyCards() {
+  const currentMonth = TODAY.toISOString().slice(0, 7);
+  const legacyMonth = state.settings.analysisWeekMonth || currentMonth;
+  const baseMonth = state.settings.analysisWeekBaseMonth || legacyMonth;
+  const compareMonth = state.settings.analysisWeekCompareMonth || shiftMonthKey(baseMonth, -1);
+  const baseWeeks = getMonthWeeks(baseMonth);
+  const compareWeeks = getMonthWeeks(compareMonth);
+
+  let baseKey = state.settings.analysisWeekBase;
+  if (!baseWeeks.some((week) => week.key === baseKey)) baseKey = getDefaultWeekKey(baseMonth);
+  const baseWeek = baseWeeks.find((week) => week.key === baseKey) || baseWeeks.at(-1);
+
+  let compareKey = state.settings.analysisWeekCompare;
+  if (!compareWeeks.some((week) => week.key === compareKey)) compareKey = getDefaultWeekKey(compareMonth, baseWeek?.index);
+  const compareWeek = compareWeeks.find((week) => week.key === compareKey) || compareWeeks.at(-1);
+
+  state.settings.analysisWeekMonth = baseMonth;
+  state.settings.analysisWeekBaseMonth = baseMonth;
+  state.settings.analysisWeekCompareMonth = compareMonth;
+  state.settings.analysisWeekBase = baseWeek?.key || "";
+  state.settings.analysisWeekCompare = compareWeek?.key || "";
+
+  document.getElementById("weeklyBaseMonthInput").value = baseMonth;
+  document.getElementById("weeklyCompareMonthInput").value = compareMonth;
+  document.getElementById("weeklyBaseInput").innerHTML = weekOptionsHtml(baseMonth);
+  document.getElementById("weeklyCompareInput").innerHTML = weekOptionsHtml(compareMonth);
+  document.getElementById("weeklyBaseInput").value = state.settings.analysisWeekBase;
+  document.getElementById("weeklyCompareInput").value = state.settings.analysisWeekCompare;
 
   const selected = [
-    { week: weeks.find((item) => item.key === baseKey), role: "기준 주" },
-    { week: weeks.find((item) => item.key === compareKey), role: "비교 주" },
-  ].filter((item, index, items) => item.week && items.findIndex((candidate) => candidate.week?.key === item.week.key) === index);
-  document.getElementById("weeklyCards").innerHTML = selected
-    .map(({ week, role }) => weeklyCardHtml(month, week, role))
-    .join("");
+    { month: baseMonth, week: baseWeek, role: "기준 주" },
+    { month: compareMonth, week: compareWeek, role: "비교 주" },
+  ].filter((item) => item.week);
+
+  if (expandedWeeklyCard && !selected.some((item) => `${item.month}:${item.week.key}` === expandedWeeklyCard)) {
+    expandedWeeklyCard = "";
+  }
+
+  const detail = selected.find(({ month, week }) => `${month}:${week.key}` === expandedWeeklyCard);
+  const detailHtml = detail ? weeklyDetailPanelHtml(detail.month, detail.week) : "";
+  document.getElementById("weeklyCards").innerHTML = `${selected
+    .map(({ month, week, role }) => weeklyCardHtml(month, week, role))
+    .join("")}${detailHtml}`;
+}
+
+function weeklyDetailPanelHtml(month, week) {
+  const flow = weeklyFlow(month, week);
+  return `
+    <div class="period-detail-panel weekly-detail-panel">
+      ${periodDetailHtml({
+        label: `${formatMonth(month)} ${week.label}`,
+        income: flow.income,
+        expense: flow.expense,
+        saving: flow.saving,
+        budget: flow.budget,
+        budgetRemaining: flow.budgetRemaining,
+        transactions: flow.transactions,
+      })}
+    </div>
+  `;
 }
 
 function weeklyCardHtml(month, week, role) {
   const flow = weeklyFlow(month, week);
   const isCurrent = TODAY.toISOString().slice(0, 10) >= week.startDate && TODAY.toISOString().slice(0, 10) <= week.endDate;
+  const expanded = expandedWeeklyCard === `${month}:${week.key}`;
   return `
-    <button class="weekly-flow-card ${isCurrent ? "current" : ""}" type="button" data-week-card="${escapeHtml(week.key)}" data-week-month="${escapeHtml(month)}">
-      <div class="weekly-card-head">
-        <div><span>${escapeHtml(role)}${isCurrent ? " · 이번 주" : ""}</span><h3>${escapeHtml(week.label)}</h3><p>${escapeHtml(week.dateLabel)}</p></div>
-        <i>상세 보기 →</i>
-      </div>
-      <div class="weekly-metrics">
-        <div><span>수입</span><strong class="income">${formatWon(flow.income)}</strong></div>
-        <div><span>지출</span><strong class="expense">${formatWon(flow.expense)}</strong></div>
-        <div><span>저축</span><strong class="saving">${formatWon(flow.saving)}</strong></div>
-      </div>
-      <div class="weekly-budget-main">
-        <div><span>이번 주 배정 예산</span><strong>${formatWon(flow.budget)}</strong></div>
-        <div class="progress-track"><i class="${flow.budgetRate >= 100 ? "over" : ""}" style="width:${Math.min(flow.budgetRate, 100)}%"></i></div>
-        <div class="weekly-budget-labels"><span>${flow.budgetRate}% 사용</span><span>${formatWon(flow.expense)} 지출</span></div>
-      </div>
-      <div class="weekly-remaining ${flow.budgetRemaining < 0 ? "negative" : ""}">
-        <span>남은 주 예산</span><strong>${formatWon(flow.budgetRemaining)}</strong>
-      </div>
-    </button>
+    <article class="weekly-flow-card ${isCurrent ? "current" : ""} ${expanded ? "expanded" : ""}">
+      <button class="period-card-toggle" type="button" data-week-card="${escapeHtml(week.key)}" data-week-month="${escapeHtml(month)}" aria-expanded="${expanded}">
+        <div class="weekly-card-head">
+          <div><span>${escapeHtml(role)}${isCurrent ? " · 이번 주" : ""}</span><h3>${escapeHtml(week.label)}</h3><p>${escapeHtml(week.dateLabel)}</p></div>
+          <i>${expanded ? "상세 닫기" : "상세 보기 →"}</i>
+        </div>
+        <div class="weekly-metrics">
+          <div><span>수입</span><strong class="income">${formatWon(flow.income)}</strong></div>
+          <div><span>지출</span><strong class="expense">${formatWon(flow.expense)}</strong></div>
+          <div><span>저축</span><strong class="saving">${formatWon(flow.saving)}</strong></div>
+        </div>
+        <div class="weekly-budget-main">
+          <div><span>이번 주 배정 예산</span><strong>${formatWon(flow.budget)}</strong></div>
+          <div class="progress-track"><i class="${flow.budgetRate >= 100 ? "over" : ""}" style="width:${Math.min(flow.budgetRate, 100)}%"></i></div>
+          <div class="weekly-budget-labels"><span>${flow.budgetRate}% 사용</span><span>${formatWon(flow.expense)} 지출</span></div>
+        </div>
+        <div class="weekly-remaining ${flow.budgetRemaining < 0 ? "negative" : ""}">
+          <span>남은 주 예산</span><strong>${formatWon(flow.budgetRemaining)}</strong>
+        </div>
+      </button>
+    </article>
   `;
 }
 
-function openMonthlyModal(month, trigger) {
-  const flow = monthlyFlow(month);
-  openPeriodModal({
-    label: formatMonth(month),
-    income: flow.income,
-    expense: flow.expense,
-    saving: flow.saving,
-    budget: flow.budget,
-    budgetRemaining: flow.budgetRemaining,
-    transactions: monthTransactions(month).filter(isTransactionEnabled),
-  }, trigger);
-}
-
-function openWeeklyModal(month, weekKey, trigger) {
-  const week = getMonthWeeks(month).find((item) => item.key === weekKey);
-  if (!week) return;
-  const flow = weeklyFlow(month, week);
-  openPeriodModal({
-    label: `${formatMonth(month)} ${week.label} (${week.dateLabel})`,
-    income: flow.income,
-    expense: flow.expense,
-    saving: flow.saving,
-    budget: flow.budget,
-    budgetRemaining: flow.budgetRemaining,
-    transactions: flow.transactions,
-  }, trigger);
-}
-
-function openPeriodModal(period, trigger) {
+function periodDetailHtml(period) {
   const expenseItems = period.transactions.filter((item) => item.type === "expense");
   const grouped = new Map();
 
@@ -801,23 +936,14 @@ function openPeriodModal(period, trigger) {
   const categories = [...grouped.values()].sort((a, b) => b.amount - a.amount);
   const expenseRate = period.income ? Math.round((period.expense / period.income) * 100) : 0;
   const savingRate = period.income ? Math.round((period.saving / period.income) * 100) : 0;
-  document.getElementById("monthlyModalTitle").textContent = `${period.label} 지출 상세`;
-  document.getElementById("monthlyModalExpenseTotal").textContent = formatWon(period.expense);
-  document.getElementById("monthlyModalSummary").innerHTML = `
-    <div class="income-summary"><span>↙</span><p><small>전체 수입</small><strong>${formatWon(period.income)}</strong></p></div>
-    <div class="expense-summary"><span>↗</span><p><small>전체 지출 · ${period.income ? `${expenseRate}%` : "비율 없음"}</small><strong>${formatWon(period.expense)}</strong></p></div>
-    <div class="saving-summary"><span>✦</span><p><small>전체 저축 · ${period.income ? `${savingRate}%` : "비율 없음"}</small><strong>${formatWon(period.saving)}</strong></p></div>
-    <div class="budget-summary"><span>₩</span><p><small>남은 예산</small><strong>${formatWon(period.budgetRemaining)}</strong></p></div>
-  `;
 
-  const target = document.getElementById("monthlyCategoryBreakdown");
-  target.innerHTML = categories.length
+  const rows = categories.length
     ? categories.map((category) => {
         const rate = period.expense ? Math.round((category.amount / period.expense) * 100) : 0;
         return `
-          <div class="monthly-category-row">
+          <div class="period-detail-category-row">
             <span class="category-dot ${escapeHtml(category.color)}">${escapeHtml(category.icon)}</span>
-            <div class="monthly-category-copy">
+            <div class="period-detail-category-copy">
               <div><p><strong>${escapeHtml(category.name)}</strong><small>${escapeHtml(category.group)}</small></p><p><strong>${formatWon(category.amount)}</strong><small>${rate}%</small></p></div>
               <div class="progress-track"><i style="width:${Math.min(rate, 100)}%"></i></div>
             </div>
@@ -826,17 +952,25 @@ function openPeriodModal(period, trigger) {
       }).join("")
     : emptyState("이 기간에는 등록된 지출이 없어요.");
 
-  lastMonthlyTrigger = trigger || null;
-  document.getElementById("monthlyModal").classList.remove("hidden");
-  document.body.classList.add("modal-open");
-  document.getElementById("closeMonthlyModalBtn").focus();
-}
-
-function closeMonthlyModal() {
-  document.getElementById("monthlyModal").classList.add("hidden");
-  document.body.classList.remove("modal-open");
-  lastMonthlyTrigger?.focus();
-  lastMonthlyTrigger = null;
+  return `
+    <div class="period-inline-detail">
+      <div class="period-detail-head">
+        <div><p class="eyebrow">Detail</p><h3>${escapeHtml(period.label)} 상세</h3></div>
+        <strong class="expense">${formatWon(period.expense)}</strong>
+      </div>
+      <div class="period-detail-summary">
+        <div class="income-summary"><span>↙</span><p><small>수입</small><strong>${formatWon(period.income)}</strong></p></div>
+        <div class="expense-summary"><span>↗</span><p><small>지출${period.income ? ` · 수입 대비 ${expenseRate}%` : ""}</small><strong>${formatWon(period.expense)}</strong></p></div>
+        <div class="saving-summary"><span>✦</span><p><small>저축${period.income ? ` · 수입 대비 ${savingRate}%` : ""}</small><strong>${formatWon(period.saving)}</strong></p></div>
+        <div class="budget-summary"><span>₩</span><p><small>남은 예산</small><strong>${formatWon(period.budgetRemaining)}</strong></p></div>
+      </div>
+      <div class="period-detail-breakdown-head">
+        <h4>카테고리별 지출</h4>
+        <p>선택한 카드 안에서 상세 내역을 바로 확인해요.</p>
+      </div>
+      <div class="period-detail-category-list">${rows}</div>
+    </div>
+  `;
 }
 
 function renderRecentTransactions() {
@@ -1424,6 +1558,8 @@ function renderSettings() {
   });
   document.getElementById("amountDisplaySetting").value = state.settings.amountDisplay;
   document.getElementById("startPageSetting").value = state.settings.startPage;
+  document.getElementById("targetSavingSetting").value = Number(state.settings.targetSavingAmount || 0) || "";
+  document.getElementById("targetSavingRateSetting").value = Number(state.settings.targetSavingRate || 0) || "";
   document.getElementById("reduceMotionSetting").checked = state.settings.reduceMotion;
   document.body.classList.toggle("reduce-motion", state.settings.reduceMotion);
 }
@@ -1572,19 +1708,29 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       setProfilePopover(false);
-      if (!document.getElementById("monthlyModal").classList.contains("hidden")) closeMonthlyModal();
+      expandedMonthlyCard = "";
+      expandedWeeklyCard = "";
+      renderMonthlyCards();
+      renderWeeklyCards();
     }
   });
 
   document.getElementById("monthlyCards").addEventListener("click", (event) => {
     const card = event.target.closest("[data-month-card]");
-    if (card) openMonthlyModal(card.dataset.monthCard, card);
+    if (!card) return;
+    expandedMonthlyCard = expandedMonthlyCard === card.dataset.monthCard ? "" : card.dataset.monthCard;
+    renderMonthlyCards();
   });
   document.getElementById("monthlyBaseInput").addEventListener("change", (event) => {
     if (!event.target.value) return;
     state.settings.analysisBaseMonth = event.target.value;
-    if (state.settings.analysisCompareMonth === event.target.value) {
+    if (!state.settings.monthlyCompareCustomized || state.settings.analysisCompareMonth === event.target.value) {
       state.settings.analysisCompareMonth = shiftMonthKey(event.target.value, -1);
+      state.settings.monthlyCompareCustomized = false;
+    }
+    if (!state.settings.monthlyThirdCustomized || state.settings.analysisThirdMonth === event.target.value) {
+      state.settings.analysisThirdMonth = shiftMonthKey(event.target.value, -2);
+      state.settings.monthlyThirdCustomized = false;
     }
     saveState();
     renderMonthlyCards();
@@ -1592,51 +1738,62 @@ function bindEvents() {
   document.getElementById("monthlyCompareInput").addEventListener("change", (event) => {
     if (!event.target.value) return;
     state.settings.analysisCompareMonth = event.target.value;
+    state.settings.monthlyCompareCustomized = true;
     if (state.settings.analysisBaseMonth === event.target.value) {
       state.settings.analysisBaseMonth = shiftMonthKey(event.target.value, 1);
     }
     saveState();
     renderMonthlyCards();
   });
-  document.getElementById("weeklyMonthInput").addEventListener("change", (event) => {
+  document.getElementById("monthlyThirdInput").addEventListener("change", (event) => {
     if (!event.target.value) return;
+    state.settings.analysisThirdMonth = event.target.value;
+    state.settings.monthlyThirdCustomized = true;
+    if (state.settings.analysisBaseMonth === event.target.value) {
+      state.settings.analysisBaseMonth = shiftMonthKey(event.target.value, 1);
+    }
+    if (state.settings.analysisCompareMonth === event.target.value) {
+      state.settings.analysisCompareMonth = shiftMonthKey(event.target.value, -1);
+      state.settings.monthlyCompareCustomized = false;
+    }
+    saveState();
+    renderMonthlyCards();
+  });
+  document.getElementById("weeklyBaseMonthInput").addEventListener("change", (event) => {
+    if (!event.target.value) return;
+    state.settings.analysisWeekBaseMonth = event.target.value;
     state.settings.analysisWeekMonth = event.target.value;
     state.settings.analysisWeekBase = "";
+    expandedWeeklyCard = "";
+    saveState();
+    renderWeeklyCards();
+  });
+  document.getElementById("weeklyCompareMonthInput").addEventListener("change", (event) => {
+    if (!event.target.value) return;
+    state.settings.analysisWeekCompareMonth = event.target.value;
     state.settings.analysisWeekCompare = "";
+    expandedWeeklyCard = "";
     saveState();
     renderWeeklyCards();
   });
   document.getElementById("weeklyBaseInput").addEventListener("change", (event) => {
     state.settings.analysisWeekBase = event.target.value;
-    if (state.settings.analysisWeekCompare === event.target.value) {
-      const weeks = getMonthWeeks(state.settings.analysisWeekMonth);
-      const index = weeks.findIndex((week) => week.key === event.target.value);
-      state.settings.analysisWeekCompare = weeks[Math.max(0, index - 1)]?.key === event.target.value
-        ? weeks[Math.min(weeks.length - 1, index + 1)]?.key
-        : weeks[Math.max(0, index - 1)]?.key;
-    }
+    expandedWeeklyCard = "";
     saveState();
     renderWeeklyCards();
   });
   document.getElementById("weeklyCompareInput").addEventListener("change", (event) => {
     state.settings.analysisWeekCompare = event.target.value;
-    if (state.settings.analysisWeekBase === event.target.value) {
-      const weeks = getMonthWeeks(state.settings.analysisWeekMonth);
-      const index = weeks.findIndex((week) => week.key === event.target.value);
-      state.settings.analysisWeekBase = weeks[Math.min(weeks.length - 1, index + 1)]?.key === event.target.value
-        ? weeks[Math.max(0, index - 1)]?.key
-        : weeks[Math.min(weeks.length - 1, index + 1)]?.key;
-    }
+    expandedWeeklyCard = "";
     saveState();
     renderWeeklyCards();
   });
   document.getElementById("weeklyCards").addEventListener("click", (event) => {
     const card = event.target.closest("[data-week-card]");
-    if (card) openWeeklyModal(card.dataset.weekMonth, card.dataset.weekCard, card);
-  });
-  document.getElementById("closeMonthlyModalBtn").addEventListener("click", closeMonthlyModal);
-  document.getElementById("monthlyModal").addEventListener("click", (event) => {
-    if (event.target.id === "monthlyModal") closeMonthlyModal();
+    if (!card) return;
+    const cardKey = `${card.dataset.weekMonth}:${card.dataset.weekCard}`;
+    expandedWeeklyCard = expandedWeeklyCard === cardKey ? "" : cardKey;
+    renderWeeklyCards();
   });
 
   document.getElementById("transactionTypeSegment").addEventListener("click", (event) => {
@@ -1762,25 +1919,77 @@ function bindEvents() {
     saveState();
     showToast("첫 화면 설정을 저장했어요.");
   });
+  document.getElementById("targetSavingSetting").addEventListener("change", (event) => {
+    state.settings.targetSavingAmount = Math.max(0, Number(event.target.value || 0));
+    saveState();
+    renderDashboard();
+    showToast(state.settings.targetSavingAmount ? "목표 저축 금액을 저장했어요." : "목표 저축 금액을 비웠어요.");
+  });
+  document.getElementById("targetSavingRateSetting").addEventListener("change", (event) => {
+    const nextRate = Math.min(100, Math.max(0, Number(event.target.value || 0)));
+    state.settings.targetSavingRate = nextRate;
+    event.target.value = nextRate || "";
+    saveState();
+    renderDashboard();
+    showToast(nextRate ? "월 저축 목표율을 저장했어요." : "월 저축 목표율을 비웠어요.");
+  });
   document.getElementById("reduceMotionSetting").addEventListener("change", (event) => {
     state.settings.reduceMotion = event.target.checked;
     saveState();
     renderSettings();
   });
-  document.getElementById("resetDataBtn").addEventListener("click", () => {
-    const confirmed = window.confirm("추가하거나 수정한 데이터를 모두 지우고 처음 상태로 되돌릴까요?");
+  document.getElementById("loadDemoDataBtn").addEventListener("click", () => {
+    const confirmed = window.confirm("데모 데이터를 불러올까요? 현재 가계부는 자동으로 백업됩니다.");
     if (!confirmed) return;
+    backupCurrentState();
     state = createDefaultState();
     state.profile = { ...currentUser };
     saveState();
-    transactionType = "expense";
-    transactionFilter = "all";
-    categoryFilter = "all";
-    recurringType = "income";
-    viewedMonth = "2026-06";
+    resetRuntimeFilters();
     renderAll();
     showPage("dashboard");
-    showToast("처음 상태로 되돌렸어요.");
+    showToast("데모 데이터를 불러왔어요.");
+  });
+
+  document.getElementById("startBlankBookBtn").addEventListener("click", () => {
+    const confirmed = window.confirm("새 가계부를 시작할까요? 현재 가계부는 자동으로 백업되고, 화면은 빈 상태로 초기화됩니다.");
+    if (!confirmed) return;
+    backupCurrentState();
+    state = createBlankState(currentUser);
+    saveState();
+    resetRuntimeFilters();
+    renderAll();
+    showPage("dashboard");
+    showToast("새 가계부를 시작했어요.");
+  });
+
+  document.getElementById("restoreLastBookBtn").addEventListener("click", () => {
+    const backup = readBackupState();
+    if (!backup) {
+      showToast("복원 가능한 마지막 가계부가 없어요.");
+      return;
+    }
+    const confirmed = window.confirm("마지막으로 백업된 가계부를 복원할까요? 현재 화면의 데이터는 자동으로 다시 백업됩니다.");
+    if (!confirmed) return;
+    backupCurrentState();
+    state = {
+      ...createDefaultState(),
+      ...backup,
+      profile: { ...currentUser },
+      settings: {
+        ...createDefaultState().settings,
+        ...(backup.settings || {}),
+        enabledManagement: {
+          ...MANAGEMENT_PRESETS.starter,
+          ...(backup.settings?.enabledManagement || {}),
+        },
+      },
+    };
+    saveState();
+    resetRuntimeFilters();
+    renderAll();
+    showPage("dashboard");
+    showToast("마지막 가계부를 복원했어요.");
   });
 }
 
