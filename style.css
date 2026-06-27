@@ -5010,3 +5010,194 @@ h2 { font-size: 22px; }
     font-size: 10px;
   }
 }
+
+
+/* Money preview: small, bottom-right, no layout jump */
+.amount-input-wrap,
+.mini-input {
+  position: relative;
+}
+
+.amount-korean-preview {
+  display: block;
+  min-height: 13px;
+  margin: 4px 2px -17px auto;
+  color: var(--green);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: right;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.amount-korean-preview:empty {
+  visibility: hidden;
+}
+
+.amount-korean-preview.mini {
+  min-height: 11px;
+  margin: 3px 2px -14px auto;
+  font-size: 8px;
+}
+
+/* Hidden asset state */
+.hidden-asset-row {
+  order: 50;
+}
+
+.hidden-asset {
+  opacity: 0.58;
+  filter: grayscale(0.08);
+}
+
+.hidden-asset::after {
+  position: absolute;
+  inset: 0;
+  border: 1px dashed rgba(72, 118, 95, 0.28);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+
+.primary-label.muted-label {
+  color: #89928c;
+  background: #eef1ed;
+}
+
+.account-actions > button[data-toggle-account-hidden] {
+  padding: 6px 8px;
+  border-radius: 999px;
+  color: var(--green-dark);
+  background: var(--green-soft);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+/* Daily calendar on dashboard */
+.daily-calendar-section {
+  margin-bottom: 14px;
+}
+
+.daily-calendar-head {
+  align-items: flex-end;
+}
+
+.daily-calendar-head h2 {
+  margin-bottom: 7px;
+}
+
+.daily-calendar-head p:last-child {
+  margin: 0;
+  color: var(--muted);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.daily-calendar-summary-wrap {
+  display: grid;
+  gap: 7px;
+  justify-items: end;
+  white-space: nowrap;
+}
+
+.daily-calendar-summary-wrap > strong {
+  font-size: 14px;
+}
+
+.daily-calendar-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  color: var(--muted);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 10px;
+}
+
+.daily-calendar-summary b {
+  margin-left: 3px;
+}
+
+.daily-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.daily-calendar-weekday {
+  padding: 0 4px 5px;
+  color: var(--muted);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.daily-calendar-day {
+  display: grid;
+  min-height: 74px;
+  align-content: space-between;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.72);
+  text-align: left;
+}
+
+.daily-calendar-day.empty {
+  background: transparent;
+  border-color: transparent;
+}
+
+.daily-calendar-day.today {
+  border-color: rgba(72, 118, 95, 0.44);
+  background: linear-gradient(180deg, #fff, #f3f8f4);
+}
+
+.daily-calendar-day.has-data {
+  box-shadow: 0 8px 18px rgba(41, 57, 48, 0.045);
+}
+
+.daily-calendar-day > span {
+  color: #5d6861;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.daily-calendar-day > strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .daily-calendar-head {
+    align-items: flex-start;
+  }
+
+  .daily-calendar-summary-wrap {
+    justify-items: start;
+  }
+
+  .daily-calendar-grid {
+    gap: 5px;
+  }
+
+  .daily-calendar-day {
+    min-height: 58px;
+    padding: 7px;
+    border-radius: 12px;
+  }
+
+  .daily-calendar-day > strong {
+    font-size: 9px;
+  }
+}

@@ -250,6 +250,22 @@
           </article>
         </div>
 
+
+        <section id="dailyCalendarSection" class="panel daily-calendar-section">
+          <div class="panel-title-row daily-calendar-head">
+            <div>
+              <p class="eyebrow">Daily calendar</p>
+              <h2>일별 금액 추이</h2>
+              <p>이번 달 날짜별 수입·지출·저축 흐름을 캘린더로 확인하세요.</p>
+            </div>
+            <div class="daily-calendar-summary-wrap">
+              <strong id="dailyCalendarMonthLabel"></strong>
+              <div id="dailyCalendarSummary" class="daily-calendar-summary"></div>
+            </div>
+          </div>
+          <div id="dailyCalendarGrid" class="daily-calendar-grid" aria-label="일별 금액 추이 캘린더"></div>
+        </section>
+
         <section id="weeklySection" class="panel weekly-section">
           <div class="panel-title-row weekly-section-head">
             <div>
@@ -587,6 +603,7 @@
               <label class="toggle-row"><span><strong>예산·저축 비율</strong><small>전체 예산 사용률과 저축 비율</small></span><input type="checkbox" data-setting="showRatios" checked /><i></i></label>
               <label class="toggle-row"><span><strong>월별 자산 흐름</strong><small>월별 수입과 지출·저축 비율</small></span><input type="checkbox" data-setting="showMonthly" checked /><i></i></label>
               <label class="toggle-row"><span><strong>주별 예산 흐름</strong><small>주별 배정 예산과 남은 금액</small></span><input type="checkbox" data-setting="showWeekly" checked /><i></i></label>
+              <label class="toggle-row"><span><strong>일별 금액 캘린더</strong><small>날짜별 수입·지출·저축 추이</small></span><input type="checkbox" data-setting="showCalendar" checked /><i></i></label>
               <label class="toggle-row"><span><strong>최근 거래</strong><small>최근 기록한 거래 5건</small></span><input type="checkbox" data-setting="showRecent" checked /><i></i></label>
               <label class="toggle-row"><span><strong>다가오는 자동이체</strong><small>이번 달 남은 자동이체 일정</small></span><input type="checkbox" data-setting="showUpcoming" checked /><i></i></label>
             </div>

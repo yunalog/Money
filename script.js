@@ -156,7 +156,7 @@ function createDefaultState() {
     schemaVersion: 5,
     cash: { balance: 120000 },
     cards: [
-      { id: "card-kakao-check", name: "카카오 체크카드", type: "check", linkedAccountId: "acc-daily" },
+      { id: "card-kakao-check", name: "카카오 체크카드", type: "check", linkedAccountId: "acc-saving" },
       { id: "card-hyundai-zero", name: "현대 Zero", type: "credit", linkedAccountId: "" },
     ],
     profile: {
@@ -172,6 +172,7 @@ function createDefaultState() {
       showRatios: true,
       showMonthly: true,
       showWeekly: true,
+      showCalendar: true,
       showRecent: true,
       showUpcoming: true,
       amountDisplay: "full",
@@ -726,6 +727,14 @@ function getAccount(id) {
   return state.accounts.find((account) => account.id === id);
 }
 
+function isAccountHidden(account) {
+  return Boolean(account?.hidden);
+}
+
+function visibleAccounts() {
+  return state.accounts.filter((account) => !isAccountHidden(account));
+}
+
 function getCategory(id) {
   return state.categories.find((category) => category.id === id);
 }
@@ -744,6 +753,7 @@ function normalizeAccounts(accounts) {
     balance: Number(account.balance || 0),
     initialBalance: Number(account.initialBalance ?? account.balance ?? 0),
     primary: Boolean(account.primary || index === 0 && !accounts.some((item) => item.primary)),
+    hidden: Boolean(account.hidden),
   }));
 }
 
@@ -754,7 +764,7 @@ function normalizeCards(cards, accounts = []) {
     name: card.name || card.title || "이름 없는 카드",
     title: card.name || card.title || "이름 없는 카드",
     type: card.type === "credit" ? "credit" : "check",
-    linkedAccountId: card.type === "credit" ? "" : (card.linkedAccountId || accounts[0]?.id || ""),
+    linkedAccountId: card.type === "credit" ? "" : (card.id === "card-kakao-check" && card.linkedAccountId === "acc-daily" ? "acc-saving" : (card.linkedAccountId || accounts[0]?.id || "")),
   }));
 }
 
@@ -945,7 +955,7 @@ function monthlyFlow(month) {
 }
 
 function totalAssets() {
-  return Number(state.cash?.balance || 0) + state.accounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
+  return Number(state.cash?.balance || 0) + visibleAccounts().reduce((sum, account) => sum + Number(account.balance || 0), 0);
 }
 
 function totalSavings() {
@@ -983,11 +993,12 @@ function optionHtml(value, label, selected = false) {
 
 function renderAccountOptions() {
   ensureAssetState();
-  const primary = state.accounts.find((account) => account.primary) || state.accounts[0];
-  const accountOptions = state.accounts
+  const selectableAccounts = visibleAccounts();
+  const primary = selectableAccounts.find((account) => account.primary) || selectableAccounts[0];
+  const accountOptions = selectableAccounts
     .map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.id === primary?.id))
     .join("");
-  const accountOptionsWithNone = `<option value="">연결 안 함</option>${state.accounts
+  const accountOptionsWithNone = `<option value="">연결 안 함</option>${selectableAccounts
     .map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`))
     .join("")}`;
 
@@ -996,13 +1007,13 @@ function renderAccountOptions() {
     if (!select) return;
     const current = select.value;
     select.innerHTML = accountOptions || `<option value="">계좌를 먼저 추가해주세요</option>`;
-    if (state.accounts.some((account) => account.id === current)) select.value = current;
+    if (selectableAccounts.some((account) => account.id === current)) select.value = current;
   });
 
   const categoryAccountInput = document.getElementById("categoryAccountInput");
   const currentCategoryAccount = categoryAccountInput.value;
   categoryAccountInput.innerHTML = accountOptionsWithNone;
-  if (state.accounts.some((account) => account.id === currentCategoryAccount)) {
+  if (selectableAccounts.some((account) => account.id === currentCategoryAccount)) {
     categoryAccountInput.value = currentCategoryAccount;
   }
 
@@ -1019,6 +1030,7 @@ function renderPaymentOptions() {
   if (!methodInput || !assetInput) return;
 
   const previousAsset = assetInput.value;
+  const selectableAccounts = visibleAccounts();
   const isTransfer = transactionType === "transfer";
   const isIncome = transactionType === "income";
   const isExpense = transactionType === "expense";
@@ -1030,15 +1042,15 @@ function renderPaymentOptions() {
 
   if (isTransfer) {
     methodInput.value = "transfer";
-    document.getElementById("transactionAccountInput").value = document.getElementById("transactionAccountInput").value || state.accounts[0]?.id || "";
+    document.getElementById("transactionAccountInput").value = document.getElementById("transactionAccountInput").value || selectableAccounts[0]?.id || "";
     return;
   }
 
   if (isIncome) {
     methodInput.value = "transfer";
     assetLabel.textContent = "입금 계좌";
-    assetInput.innerHTML = state.accounts.length
-      ? state.accounts.map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.primary)).join("")
+    assetInput.innerHTML = selectableAccounts.length
+      ? selectableAccounts.map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.primary)).join("")
       : `<option value="">계좌를 먼저 추가해주세요</option>`;
   } else if (isExpense) {
     const method = methodInput.value || "cash";
@@ -1057,20 +1069,20 @@ function renderPaymentOptions() {
         : `<option value="">카드를 먼저 추가해주세요</option>`;
     } else {
       assetLabel.textContent = "출금 계좌";
-      assetInput.innerHTML = state.accounts.length
-        ? state.accounts.map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.primary)).join("")
+      assetInput.innerHTML = selectableAccounts.length
+        ? selectableAccounts.map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.primary)).join("")
         : `<option value="">계좌를 먼저 추가해주세요</option>`;
     }
   } else {
     methodInput.value = "transfer";
     assetLabel.textContent = "사용 계좌";
-    assetInput.innerHTML = state.accounts.length
-      ? state.accounts.map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.primary)).join("")
+    assetInput.innerHTML = selectableAccounts.length
+      ? selectableAccounts.map((account) => optionHtml(account.id, `${account.name} · ${account.bank}`, account.primary)).join("")
       : `<option value="">계좌를 먼저 추가해주세요</option>`;
   }
 
   if ([...assetInput.options].some((option) => option.value === previousAsset)) assetInput.value = previousAsset;
-  if (assetInput.value && state.accounts.some((account) => account.id === assetInput.value)) {
+  if (assetInput.value && selectableAccounts.some((account) => account.id === assetInput.value)) {
     document.getElementById("transactionAccountInput").value = assetInput.value;
   }
 }
@@ -1124,11 +1136,73 @@ function renderDashboard() {
     : savingRate >= 20 ? "좋은 흐름" : "조금 더";
 
   renderMonthlyCards();
+  renderDailyCalendar();
   renderWeeklyCards();
   renderRecentTransactions();
   renderUpcoming();
   applyDashboardVisibility();
   applyManagementVisibility();
+}
+
+
+function renderDailyCalendar() {
+  const section = document.getElementById("dailyCalendarSection");
+  const grid = document.getElementById("dailyCalendarGrid");
+  const summary = document.getElementById("dailyCalendarSummary");
+  const label = document.getElementById("dailyCalendarMonthLabel");
+  if (!section || !grid || !summary || !label) return;
+
+  const month = TODAY.toISOString().slice(0, 7);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const firstDate = new Date(year, monthNumber - 1, 1);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const startBlank = firstDate.getDay();
+  const transactions = monthTransactions(month).filter(isTransactionEnabled);
+  const byDate = new Map();
+
+  transactions.forEach((item) => {
+    if (!byDate.has(item.date)) byDate.set(item.date, { income: 0, expense: 0, saving: 0, count: 0 });
+    const bucket = byDate.get(item.date);
+    if (item.type === "income") bucket.income += Number(item.amount || 0);
+    if (item.type === "expense") bucket.expense += Number(item.amount || 0);
+    if (item.type === "saving") bucket.saving += Number(item.amount || 0);
+    bucket.count += 1;
+  });
+
+  const weekdayHtml = ["일", "월", "화", "수", "목", "금", "토"]
+    .map((day) => `<span class="daily-calendar-weekday">${day}</span>`)
+    .join("");
+  const blanks = Array.from({ length: startBlank }, () => `<span class="daily-calendar-day empty"></span>`).join("");
+  const todayKey = TODAY.toISOString().slice(0, 10);
+  const dayCells = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1;
+    const dateKey = `${month}-${String(day).padStart(2, "0")}`;
+    const data = byDate.get(dateKey) || { income: 0, expense: 0, saving: 0, count: 0 };
+    const net = data.income - data.expense - data.saving;
+    const hasData = data.count > 0;
+    const amountLabel = hasData ? formatSignedWon(net) : "";
+    const title = hasData
+      ? `${day}일 · 수입 ${formatWon(data.income)} / 지출 ${formatWon(data.expense)} / 저축 ${formatWon(data.saving)}`
+      : `${day}일 · 거래 없음`;
+    return `
+      <button class="daily-calendar-day ${hasData ? "has-data" : ""} ${dateKey === todayKey ? "today" : ""}" type="button" title="${escapeHtml(title)}">
+        <span>${day}</span>
+        ${hasData ? `<strong class="${net >= 0 ? "income" : "expense"}">${escapeHtml(amountLabel)}</strong>` : ""}
+      </button>
+    `;
+  }).join("");
+
+  const income = transactions.filter((item) => item.type === "income").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const expense = transactions.filter((item) => item.type === "expense").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const saving = transactions.filter((item) => item.type === "saving").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  label.textContent = formatMonth(month);
+  summary.innerHTML = `
+    <span>수입 <b class="income">${formatWon(income)}</b></span>
+    <span>지출 <b class="expense">${formatWon(expense)}</b></span>
+    <span>저축 <b class="saving">${formatWon(saving)}</b></span>
+  `;
+  grid.innerHTML = `${weekdayHtml}${blanks}${dayCells}`;
 }
 
 function renderMonthlyCards() {
@@ -1538,11 +1612,11 @@ function syncAccountFromCategory() {
   const category = getCategory(document.getElementById("transactionCategoryInput").value);
   const methodInput = document.getElementById("transactionPaymentMethodInput");
   const assetInput = document.getElementById("transactionPaymentAssetInput");
-  if (category?.accountId && getAccount(category.accountId) && transactionType !== "expense") {
+  if (category?.accountId && getAccount(category.accountId) && !isAccountHidden(getAccount(category.accountId)) && transactionType !== "expense") {
     assetInput.value = category.accountId;
     document.getElementById("transactionAccountInput").value = category.accountId;
   }
-  if (transactionType === "expense" && methodInput.value === "transfer" && category?.accountId && getAccount(category.accountId)) {
+  if (transactionType === "expense" && methodInput.value === "transfer" && category?.accountId && getAccount(category.accountId) && !isAccountHidden(getAccount(category.accountId))) {
     assetInput.value = category.accountId;
     document.getElementById("transactionAccountInput").value = category.accountId;
   }
@@ -1692,7 +1766,7 @@ function removeTransaction(id) {
 
 function renderAccounts() {
   ensureAssetState();
-  const accountTotal = state.accounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
+  const accountTotal = visibleAccounts().reduce((sum, account) => sum + Number(account.balance || 0), 0);
   const thisMonth = TODAY.toISOString().slice(0, 7);
   document.getElementById("accountCount").textContent = 1 + state.accounts.length + state.cards.length;
   document.getElementById("cashAssetSummary").textContent = formatWon(state.cash.balance);
@@ -1702,16 +1776,18 @@ function renderAccounts() {
 
   const target = document.getElementById("accountList");
   const creditCards = state.cards.filter((card) => card.type === "credit");
-  const accountSections = state.accounts.map((account, index) => {
+  const orderedAccounts = [...visibleAccounts(), ...state.accounts.filter(isAccountHidden)];
+  const accountSections = orderedAccounts.map((account, index) => {
     const linkedCards = state.cards.filter((card) => card.type === "check" && card.linkedAccountId === account.id);
     return `
-      <section class="asset-pair-row">
-        <article class="account-card editable-asset ${account.primary ? "primary-account" : ""} ${editingAccountId === account.id ? "editing" : ""}" data-edit-account="${escapeHtml(account.id)}" tabindex="0" role="button" aria-label="${escapeHtml(account.name)} 계좌 수정">
+      <section class="asset-pair-row ${isAccountHidden(account) ? "hidden-asset-row" : ""}">
+        <article class="account-card editable-asset ${account.primary ? "primary-account" : ""} ${isAccountHidden(account) ? "hidden-asset" : ""} ${editingAccountId === account.id ? "editing" : ""}" data-edit-account="${escapeHtml(account.id)}" tabindex="0" role="button" aria-label="${escapeHtml(account.name)} 계좌 수정">
           <div class="account-accent accent-${index % 4}"></div>
           <div class="account-card-top">
             <span class="bank-symbol">${escapeHtml(account.bank.slice(0, 1))}</span>
             <div class="account-actions">
-              ${account.primary ? `<span class="primary-label">주거래</span>` : `<button type="button" data-primary-account="${escapeHtml(account.id)}">주거래로</button>`}
+              ${isAccountHidden(account) ? `<span class="primary-label muted-label">숨김</span>` : account.primary ? `<span class="primary-label">주거래</span>` : `<button type="button" data-primary-account="${escapeHtml(account.id)}">주거래로</button>`}
+              <button type="button" data-toggle-account-hidden="${escapeHtml(account.id)}">${isAccountHidden(account) ? "해제" : "숨김"}</button>
               <button class="more-delete" type="button" data-delete-account="${escapeHtml(account.id)}" aria-label="${escapeHtml(account.name)} 삭제">×</button>
             </div>
           </div>
@@ -1719,7 +1795,7 @@ function renderAccounts() {
             <p>${escapeHtml(account.bank)}</p>
             <h3>${escapeHtml(account.name)}</h3>
             <strong>${formatWon(account.balance)}</strong>
-            <small>등록 기본 잔액 ${formatWon(account.initialBalance ?? account.balance)}</small>
+            <small>${isAccountHidden(account) ? "숨김 처리된 계좌 · " : ""}등록 기본 잔액 ${formatWon(account.initialBalance ?? account.balance)}</small>
           </div>
         </article>
         <div class="linked-card-column">
@@ -1865,6 +1941,26 @@ function setPrimaryAccount(id) {
   saveState();
   renderAll();
   showToast("주거래 계좌를 변경했어요.");
+}
+
+
+function toggleAccountHidden(id) {
+  const account = getAccount(id);
+  if (!account) return;
+
+  account.hidden = !account.hidden;
+  if (account.hidden && account.primary) {
+    account.primary = false;
+    const nextPrimary = visibleAccounts().find((item) => item.id !== id);
+    if (nextPrimary) nextPrimary.primary = true;
+  }
+  if (!account.hidden && !state.accounts.some((item) => item.primary && !item.hidden)) {
+    account.primary = true;
+  }
+
+  saveState();
+  renderAll();
+  showToast(account.hidden ? "계좌를 숨김 처리했어요." : "계좌 숨김을 해제했어요.");
 }
 
 function removeAccount(id) {
@@ -2278,6 +2374,7 @@ function applyDashboardVisibility() {
   document.getElementById("ratioSection").classList.toggle("hidden", !state.settings.showRatios);
   document.getElementById("monthlySection").classList.toggle("hidden", !state.settings.showMonthly);
   document.getElementById("weeklySection").classList.toggle("hidden", !state.settings.showWeekly);
+  document.getElementById("dailyCalendarSection")?.classList.toggle("hidden", !state.settings.showCalendar);
   document.getElementById("recentSection").classList.toggle("hidden", !state.settings.showRecent);
   document.getElementById("upcomingSection").classList.toggle("hidden", !state.settings.showUpcoming);
   const bottom = document.querySelector(".dashboard-bottom");
@@ -2514,6 +2611,7 @@ function bindEvents() {
   document.getElementById("accountList").addEventListener("click", (event) => {
     const primaryButton = event.target.closest("[data-primary-account]");
     const deleteButton = event.target.closest("[data-delete-account]");
+    const hideButton = event.target.closest("[data-toggle-account-hidden]");
     const deleteCardButton = event.target.closest("[data-delete-card]");
     const accountCard = event.target.closest("[data-edit-account]");
     const cardItem = event.target.closest("[data-edit-card]");
@@ -2524,6 +2622,10 @@ function bindEvents() {
     }
     if (deleteButton) {
       removeAccount(deleteButton.dataset.deleteAccount);
+      return;
+    }
+    if (hideButton) {
+      toggleAccountHidden(hideButton.dataset.toggleAccountHidden);
       return;
     }
     if (deleteCardButton) {
