@@ -1,4 +1,5 @@
 import {
+  deleteFirebaseAccount,
   getCurrentFirebaseUser,
   getFirebaseAuthMessage,
   loginWithEmail,
@@ -11,6 +12,8 @@ import {
 import {
   backupUserState,
   createInitialUserState,
+  deleteUserBackup,
+  deleteUserState,
   loadUserBackup,
   loadUserState,
   saveUserState,
@@ -149,8 +152,8 @@ function createDefaultState() {
   return {
     schemaVersion: 4,
     profile: {
-      name: "김민지",
-      email: "minji@example.com",
+      name: "",
+      email: "",
     },
     accounts,
     categories,
@@ -196,12 +199,22 @@ function userBackupKey(email) {
   return `${USER_BACKUP_PREFIX}:${encodeURIComponent(normalizeEmail(email))}`;
 }
 
+
+function cleanProfileName(value) {
+  return String(value || "").trim();
+}
+
+function resolveProfileName(...names) {
+  const cleaned = names.map(cleanProfileName).filter(Boolean);
+  return cleaned.find((name) => name !== "사용자") || cleaned[0] || "사용자";
+}
+
 function createBlankState(profile = state.profile || currentUser || {}) {
   const defaults = createDefaultState();
   return {
     ...defaults,
     profile: {
-      name: profile.name || currentUser?.name || "사용자",
+      name: resolveProfileName(profile.name, currentUser?.name),
       email: profile.email || currentUser?.email || "",
     },
     accounts: [],
@@ -306,12 +319,13 @@ async function loadStateFromFirebase(user) {
   const data = await loadUserState(user.uid);
 
   if (!data) {
+    const profileName = resolveProfileName(user.displayName);
     const freshState = createBlankState({
-      name: user.displayName || "사용자",
+      name: profileName,
       email: user.email || "",
     });
     freshState.profile = {
-      name: user.displayName || "사용자",
+      name: profileName,
       email: user.email || "",
     };
     await createInitialUserState(user.uid, freshState);
@@ -334,6 +348,8 @@ async function loadStateFromFirebase(user) {
     category.enabled = category.enabled !== false;
   });
 
+  const profileName = resolveProfileName(user.displayName, data.profile?.name);
+
   return {
     ...defaults,
     ...data,
@@ -341,7 +357,7 @@ async function loadStateFromFirebase(user) {
     profile: {
       ...defaults.profile,
       ...(data.profile || {}),
-      name: data.profile?.name || user.displayName || "사용자",
+      name: profileName,
       email: user.email || "",
     },
     accounts: Array.isArray(data.accounts) ? data.accounts : defaults.accounts,
@@ -368,7 +384,7 @@ async function saveStateToFirebase() {
     ownerUid: user.uid,
     profile: {
       ...(state.profile || {}),
-      name: state.profile?.name || user.displayName || "사용자",
+      name: resolveProfileName(state.profile?.name, user.displayName),
       email: user.email || "",
     },
   });
@@ -438,14 +454,16 @@ function setAuthBusy(busy) {
 async function openAppForFirebaseUser(user) {
   currentUser = {
     uid: user.uid,
-    name: user.displayName || "사용자",
+    name: resolveProfileName(user.displayName),
     email: user.email || "",
   };
 
   state = await loadStateFromFirebase(user);
+  const profileName = resolveProfileName(user.displayName, state.profile?.name, currentUser.name);
+  currentUser.name = profileName;
   state.profile = {
     ...(state.profile || {}),
-    name: state.profile?.name || currentUser.name,
+    name: profileName,
     email: currentUser.email,
   };
 
@@ -463,6 +481,40 @@ async function logout() {
   } catch (error) {
     console.error("Firebase 로그아웃 실패:", error);
     showToast("로그아웃 중 문제가 생겼어요.");
+  }
+}
+
+async function deleteAccount() {
+  const user = getCurrentFirebaseUser();
+  if (!user) {
+    showToast("로그인 정보를 찾을 수 없어요.");
+    return;
+  }
+
+  const firstConfirm = window.confirm(
+    "정말 회원탈퇴할까요? Firebase 계정과 저장된 가계부 데이터가 모두 삭제되며 복구할 수 없어요."
+  );
+  if (!firstConfirm) return;
+
+  const typed = window.prompt("마지막 확인이에요. 회원탈퇴를 입력하면 계정 삭제를 진행합니다.");
+  if (typed !== "회원탈퇴") {
+    showToast("회원탈퇴가 취소됐어요.");
+    return;
+  }
+
+  try {
+    await deleteUserState(user.uid);
+    await deleteUserBackup(user.uid);
+    await deleteFirebaseAccount();
+
+    currentUser = null;
+    state = createDefaultState();
+    resetRuntimeFilters();
+    setProfilePopover(false);
+    showToast("회원탈퇴가 완료됐어요.");
+  } catch (error) {
+    console.error("회원탈퇴 실패:", error);
+    showToast(getFirebaseAuthMessage(error));
   }
 }
 
@@ -494,13 +546,14 @@ async function handleAuthSubmit(event) {
 
       currentUser = { uid: user.uid, name, email };
       state = createBlankState({ name, email });
+      state.profile = { name, email };
       await saveStateToFirebase();
       showToast(`${name}님, 모아에 오신 걸 환영해요.`);
       return;
     }
 
     const user = await loginWithEmail({ email, password });
-    showToast(`${user.displayName || "사용자"}님, 다시 만나서 반가워요.`);
+    showToast(`${resolveProfileName(user.displayName)}님, 다시 만나서 반가워요.`);
   } catch (error) {
     console.error("Firebase 인증 실패:", error);
     setAuthHint(getFirebaseAuthMessage(error), true);
@@ -2080,6 +2133,8 @@ function bindEvents() {
     showPage("dashboard");
     showToast("마지막 가계부를 복원했어요.");
   });
+
+  document.getElementById("deleteAccountBtn").addEventListener("click", deleteAccount);
 }
 
 function init() {

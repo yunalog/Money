@@ -68,3 +68,7 @@ export async function loadUserBackup(uid) {
 export async function deleteUserState(uid) {
   await deleteDoc(getUserStateRef(uid));
 }
+
+export async function deleteUserBackup(uid) {
+  await deleteDoc(getUserBackupRef(uid));
+}
