@@ -140,11 +140,17 @@ function createDefaultState() {
       showSummary: true,
       showRatios: true,
       showMonthly: true,
+      showWeekly: true,
       showRecent: true,
       showUpcoming: true,
       amountDisplay: "full",
       startPage: "dashboard",
       reduceMotion: false,
+      analysisBaseMonth: TODAY.toISOString().slice(0, 7),
+      analysisCompareMonth: shiftMonthKey(TODAY.toISOString().slice(0, 7), -1),
+      analysisWeekMonth: TODAY.toISOString().slice(0, 7),
+      analysisWeekBase: "",
+      analysisWeekCompare: "",
       managementPreset: "starter",
       enabledManagement: { ...MANAGEMENT_PRESETS.starter },
     },
@@ -452,26 +458,28 @@ function sumVisibleByType(type, month = viewedMonth) {
     .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 }
 
-function recentMonthKeys(count = 6) {
-  return Array.from({ length: count }, (_, index) => {
-    const offset = index - (count - 1);
-    const date = new Date(TODAY.getFullYear(), TODAY.getMonth() + offset, 1);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-  });
+function shiftMonthKey(month, offset) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(year, monthNumber - 1 + offset, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function monthlyFlow(month) {
   const income = sumVisibleByType("income", month);
   const expense = sumVisibleByType("expense", month);
   const saving = sumVisibleByType("saving", month);
+  const budget = totalExpenseBudget();
   return {
     month,
     income,
     expense,
     saving,
+    budget,
     expenseRate: income ? Math.round((expense / income) * 100) : 0,
     savingRate: income ? Math.round((saving / income) * 100) : 0,
     remaining: income - expense - saving,
+    budgetRate: budget ? Math.round((expense / budget) * 100) : 0,
+    budgetRemaining: budget - expense,
   };
 }
 
@@ -570,6 +578,7 @@ function renderDashboard() {
   document.getElementById("savingStatusBadge").textContent = savingRate >= 20 ? "좋은 흐름" : "조금 더";
 
   renderMonthlyCards();
+  renderWeeklyCards();
   renderRecentTransactions();
   renderUpcoming();
   applyDashboardVisibility();
@@ -579,45 +588,199 @@ function renderDashboard() {
 function renderMonthlyCards() {
   const target = document.getElementById("monthlyCards");
   const currentMonth = TODAY.toISOString().slice(0, 7);
-  target.innerHTML = recentMonthKeys().map((month) => {
-    const flow = monthlyFlow(month);
-    const [year, monthNumber] = month.split("-").map(Number);
-    const ringBase = flow.income || flow.expense + flow.saving;
-    const expenseEnd = ringBase ? Math.min((flow.expense / ringBase) * 360, 360) : 0;
-    const savingEnd = ringBase
-      ? Math.min(expenseEnd + (flow.saving / ringBase) * 360, 360)
-      : 0;
-    const hasData = flow.income + flow.expense + flow.saving > 0;
-    const expenseRateLabel = flow.income ? `${flow.expenseRate}%` : "—";
-    const savingRateLabel = flow.income ? `${flow.savingRate}%` : "—";
-    return `
-      <button class="monthly-flow-card ${month === currentMonth ? "current" : ""} ${hasData ? "" : "empty"}" type="button" data-month-card="${month}" aria-label="${year}년 ${monthNumber}월 상세 보기">
-        <div class="monthly-card-head">
-          <div><span>${year}년</span><strong>${monthNumber}월</strong></div>
-          ${month === currentMonth ? `<em>이번 달</em>` : `<i>상세 보기 →</i>`}
+  const baseMonth = state.settings.analysisBaseMonth || currentMonth;
+  const compareMonth = state.settings.analysisCompareMonth || shiftMonthKey(baseMonth, -1);
+  state.settings.analysisBaseMonth = baseMonth;
+  state.settings.analysisCompareMonth = compareMonth;
+  document.getElementById("monthlyBaseInput").value = baseMonth;
+  document.getElementById("monthlyCompareInput").value = compareMonth;
+
+  const periods = [
+    { month: baseMonth, role: "기준 월" },
+    { month: compareMonth, role: "비교 월" },
+  ].filter((item, index, items) => items.findIndex((candidate) => candidate.month === item.month) === index);
+  target.innerHTML = periods.map((period) => monthlyCardHtml(period.month, period.role)).join("");
+}
+
+function monthlyCardHtml(month, role) {
+  const flow = monthlyFlow(month);
+  const currentMonth = TODAY.toISOString().slice(0, 7);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const ringBase = flow.income || flow.expense + flow.saving;
+  const expenseEnd = ringBase ? Math.min((flow.expense / ringBase) * 360, 360) : 0;
+  const savingEnd = ringBase ? Math.min(expenseEnd + (flow.saving / ringBase) * 360, 360) : 0;
+  const hasData = flow.income + flow.expense + flow.saving > 0;
+  const expenseRateLabel = flow.income ? `${flow.expenseRate}%` : "—";
+  const savingRateLabel = flow.income ? `${flow.savingRate}%` : "—";
+  return `
+    <button class="monthly-flow-card ${month === currentMonth ? "current" : ""} ${hasData ? "" : "empty"}" type="button" data-month-card="${month}" aria-label="${year}년 ${monthNumber}월 상세 보기">
+      <div class="monthly-card-head">
+        <div><span>${year}년</span><strong>${monthNumber}월</strong></div>
+        <em>${escapeHtml(role)}${month === currentMonth ? " · 이번 달" : ""}</em>
+      </div>
+      <div class="monthly-ring" style="--expense-end:${expenseEnd}deg; --saving-end:${savingEnd}deg">
+        <div class="monthly-ring-center">
+          <small>전체 수입</small>
+          <strong>${formatWon(flow.income)}</strong>
         </div>
-        <div class="monthly-ring" style="--expense-end:${expenseEnd}deg; --saving-end:${savingEnd}deg">
-          <div class="monthly-ring-center">
-            <small>전체 수입</small>
-            <strong>${formatWon(flow.income)}</strong>
-          </div>
-        </div>
-        <div class="monthly-flow-values">
-          <div><span><i class="expense-dot"></i>지출 <b>${expenseRateLabel}</b></span><strong>${formatWon(flow.expense)}</strong></div>
-          <div><span><i class="saving-dot"></i>저축 <b>${savingRateLabel}</b></span><strong>${formatWon(flow.saving)}</strong></div>
-        </div>
-        <div class="monthly-card-foot ${flow.remaining < 0 ? "negative" : ""}">
-          <span>수입에서 남은 금액</span><strong>${formatWon(flow.remaining)}</strong>
-        </div>
-      </button>
-    `;
-  }).join("");
+      </div>
+      <div class="monthly-flow-values">
+        <div><span><i class="expense-dot"></i>지출 <b>${expenseRateLabel}</b></span><strong>${formatWon(flow.expense)}</strong></div>
+        <div><span><i class="saving-dot"></i>저축 <b>${savingRateLabel}</b></span><strong>${formatWon(flow.saving)}</strong></div>
+      </div>
+      <div class="period-budget-progress">
+        <div><span>월 예산 사용</span><strong>${formatWon(flow.expense)} / ${formatWon(flow.budget)}</strong></div>
+        <div class="progress-track"><i class="${flow.budgetRate >= 100 ? "over" : ""}" style="width:${Math.min(flow.budgetRate, 100)}%"></i></div>
+      </div>
+      <div class="monthly-card-foot ${flow.budgetRemaining < 0 ? "negative" : ""}">
+        <span>남은 월 예산</span><strong>${formatWon(flow.budgetRemaining)}</strong>
+      </div>
+    </button>
+  `;
+}
+
+function getMonthWeeks(month) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const weeks = [];
+  let startDay = 1;
+  let index = 1;
+
+  while (startDay <= daysInMonth) {
+    const startDate = new Date(year, monthNumber - 1, startDay);
+    const daysSinceMonday = (startDate.getDay() + 6) % 7;
+    const endDay = Math.min(startDay + (6 - daysSinceMonday), daysInMonth);
+    weeks.push({
+      key: `${month}-w${index}`,
+      index,
+      month,
+      startDay,
+      endDay,
+      days: endDay - startDay + 1,
+      daysInMonth,
+      startDate: `${month}-${String(startDay).padStart(2, "0")}`,
+      endDate: `${month}-${String(endDay).padStart(2, "0")}`,
+      label: `${index}주차`,
+      dateLabel: `${monthNumber}월 ${startDay}일 – ${endDay}일`,
+    });
+    startDay = endDay + 1;
+    index += 1;
+  }
+  return weeks;
+}
+
+function weeklyFlow(month, week) {
+  const transactions = state.transactions.filter((item) =>
+    item.date >= week.startDate && item.date <= week.endDate && isTransactionEnabled(item)
+  );
+  const sum = (type) => transactions
+    .filter((item) => item.type === type)
+    .reduce((total, item) => total + Number(item.amount), 0);
+  const income = sum("income");
+  const expense = sum("expense");
+  const saving = sum("saving");
+  const budget = Math.round(totalExpenseBudget() * (week.days / week.daysInMonth));
+  return {
+    ...week,
+    transactions,
+    income,
+    expense,
+    saving,
+    budget,
+    budgetRate: budget ? Math.round((expense / budget) * 100) : 0,
+    budgetRemaining: budget - expense,
+  };
+}
+
+function renderWeeklyCards() {
+  const month = state.settings.analysisWeekMonth || TODAY.toISOString().slice(0, 7);
+  const weeks = getMonthWeeks(month);
+  const todayKey = TODAY.toISOString().slice(0, 10);
+  const currentWeek = weeks.find((week) => todayKey >= week.startDate && todayKey <= week.endDate);
+  let baseKey = state.settings.analysisWeekBase;
+  if (!weeks.some((week) => week.key === baseKey)) baseKey = currentWeek?.key || weeks.at(-1)?.key;
+  const baseIndex = weeks.findIndex((week) => week.key === baseKey);
+  let compareKey = state.settings.analysisWeekCompare;
+  if (!weeks.some((week) => week.key === compareKey) || compareKey === baseKey) {
+    compareKey = weeks[Math.max(baseIndex - 1, 0)]?.key;
+    if (compareKey === baseKey) compareKey = weeks[Math.min(baseIndex + 1, weeks.length - 1)]?.key;
+  }
+
+  state.settings.analysisWeekMonth = month;
+  state.settings.analysisWeekBase = baseKey;
+  state.settings.analysisWeekCompare = compareKey;
+  document.getElementById("weeklyMonthInput").value = month;
+  const options = weeks.map((week) => optionHtml(week.key, `${week.label} · ${week.dateLabel}`)).join("");
+  document.getElementById("weeklyBaseInput").innerHTML = options;
+  document.getElementById("weeklyCompareInput").innerHTML = options;
+  document.getElementById("weeklyBaseInput").value = baseKey;
+  document.getElementById("weeklyCompareInput").value = compareKey;
+
+  const selected = [
+    { week: weeks.find((item) => item.key === baseKey), role: "기준 주" },
+    { week: weeks.find((item) => item.key === compareKey), role: "비교 주" },
+  ].filter((item, index, items) => item.week && items.findIndex((candidate) => candidate.week?.key === item.week.key) === index);
+  document.getElementById("weeklyCards").innerHTML = selected
+    .map(({ week, role }) => weeklyCardHtml(month, week, role))
+    .join("");
+}
+
+function weeklyCardHtml(month, week, role) {
+  const flow = weeklyFlow(month, week);
+  const isCurrent = TODAY.toISOString().slice(0, 10) >= week.startDate && TODAY.toISOString().slice(0, 10) <= week.endDate;
+  return `
+    <button class="weekly-flow-card ${isCurrent ? "current" : ""}" type="button" data-week-card="${escapeHtml(week.key)}" data-week-month="${escapeHtml(month)}">
+      <div class="weekly-card-head">
+        <div><span>${escapeHtml(role)}${isCurrent ? " · 이번 주" : ""}</span><h3>${escapeHtml(week.label)}</h3><p>${escapeHtml(week.dateLabel)}</p></div>
+        <i>상세 보기 →</i>
+      </div>
+      <div class="weekly-metrics">
+        <div><span>수입</span><strong class="income">${formatWon(flow.income)}</strong></div>
+        <div><span>지출</span><strong class="expense">${formatWon(flow.expense)}</strong></div>
+        <div><span>저축</span><strong class="saving">${formatWon(flow.saving)}</strong></div>
+      </div>
+      <div class="weekly-budget-main">
+        <div><span>이번 주 배정 예산</span><strong>${formatWon(flow.budget)}</strong></div>
+        <div class="progress-track"><i class="${flow.budgetRate >= 100 ? "over" : ""}" style="width:${Math.min(flow.budgetRate, 100)}%"></i></div>
+        <div class="weekly-budget-labels"><span>${flow.budgetRate}% 사용</span><span>${formatWon(flow.expense)} 지출</span></div>
+      </div>
+      <div class="weekly-remaining ${flow.budgetRemaining < 0 ? "negative" : ""}">
+        <span>남은 주 예산</span><strong>${formatWon(flow.budgetRemaining)}</strong>
+      </div>
+    </button>
+  `;
 }
 
 function openMonthlyModal(month, trigger) {
   const flow = monthlyFlow(month);
-  const expenseItems = monthTransactions(month)
-    .filter((item) => item.type === "expense" && isTransactionEnabled(item));
+  openPeriodModal({
+    label: formatMonth(month),
+    income: flow.income,
+    expense: flow.expense,
+    saving: flow.saving,
+    budget: flow.budget,
+    budgetRemaining: flow.budgetRemaining,
+    transactions: monthTransactions(month).filter(isTransactionEnabled),
+  }, trigger);
+}
+
+function openWeeklyModal(month, weekKey, trigger) {
+  const week = getMonthWeeks(month).find((item) => item.key === weekKey);
+  if (!week) return;
+  const flow = weeklyFlow(month, week);
+  openPeriodModal({
+    label: `${formatMonth(month)} ${week.label} (${week.dateLabel})`,
+    income: flow.income,
+    expense: flow.expense,
+    saving: flow.saving,
+    budget: flow.budget,
+    budgetRemaining: flow.budgetRemaining,
+    transactions: flow.transactions,
+  }, trigger);
+}
+
+function openPeriodModal(period, trigger) {
+  const expenseItems = period.transactions.filter((item) => item.type === "expense");
   const grouped = new Map();
 
   expenseItems.forEach((item) => {
@@ -636,18 +799,21 @@ function openMonthlyModal(month, trigger) {
   });
 
   const categories = [...grouped.values()].sort((a, b) => b.amount - a.amount);
-  document.getElementById("monthlyModalTitle").textContent = `${formatMonth(month)} 지출 상세`;
-  document.getElementById("monthlyModalExpenseTotal").textContent = formatWon(flow.expense);
+  const expenseRate = period.income ? Math.round((period.expense / period.income) * 100) : 0;
+  const savingRate = period.income ? Math.round((period.saving / period.income) * 100) : 0;
+  document.getElementById("monthlyModalTitle").textContent = `${period.label} 지출 상세`;
+  document.getElementById("monthlyModalExpenseTotal").textContent = formatWon(period.expense);
   document.getElementById("monthlyModalSummary").innerHTML = `
-    <div class="income-summary"><span>↙</span><p><small>전체 수입</small><strong>${formatWon(flow.income)}</strong></p></div>
-    <div class="expense-summary"><span>↗</span><p><small>전체 지출 · ${flow.income ? `${flow.expenseRate}%` : "비율 없음"}</small><strong>${formatWon(flow.expense)}</strong></p></div>
-    <div class="saving-summary"><span>✦</span><p><small>전체 저축 · ${flow.income ? `${flow.savingRate}%` : "비율 없음"}</small><strong>${formatWon(flow.saving)}</strong></p></div>
+    <div class="income-summary"><span>↙</span><p><small>전체 수입</small><strong>${formatWon(period.income)}</strong></p></div>
+    <div class="expense-summary"><span>↗</span><p><small>전체 지출 · ${period.income ? `${expenseRate}%` : "비율 없음"}</small><strong>${formatWon(period.expense)}</strong></p></div>
+    <div class="saving-summary"><span>✦</span><p><small>전체 저축 · ${period.income ? `${savingRate}%` : "비율 없음"}</small><strong>${formatWon(period.saving)}</strong></p></div>
+    <div class="budget-summary"><span>₩</span><p><small>남은 예산</small><strong>${formatWon(period.budgetRemaining)}</strong></p></div>
   `;
 
   const target = document.getElementById("monthlyCategoryBreakdown");
   target.innerHTML = categories.length
     ? categories.map((category) => {
-        const rate = flow.expense ? Math.round((category.amount / flow.expense) * 100) : 0;
+        const rate = period.expense ? Math.round((category.amount / period.expense) * 100) : 0;
         return `
           <div class="monthly-category-row">
             <span class="category-dot ${escapeHtml(category.color)}">${escapeHtml(category.icon)}</span>
@@ -658,7 +824,7 @@ function openMonthlyModal(month, trigger) {
           </div>
         `;
       }).join("")
-    : emptyState("이 달에는 등록된 지출이 없어요.");
+    : emptyState("이 기간에는 등록된 지출이 없어요.");
 
   lastMonthlyTrigger = trigger || null;
   document.getElementById("monthlyModal").classList.remove("hidden");
@@ -1305,6 +1471,7 @@ function applyDashboardVisibility() {
   document.getElementById("summaryGrid").classList.toggle("hidden", !state.settings.showSummary);
   document.getElementById("ratioSection").classList.toggle("hidden", !state.settings.showRatios);
   document.getElementById("monthlySection").classList.toggle("hidden", !state.settings.showMonthly);
+  document.getElementById("weeklySection").classList.toggle("hidden", !state.settings.showWeekly);
   document.getElementById("recentSection").classList.toggle("hidden", !state.settings.showRecent);
   document.getElementById("upcomingSection").classList.toggle("hidden", !state.settings.showUpcoming);
   const bottom = document.querySelector(".dashboard-bottom");
@@ -1412,6 +1579,60 @@ function bindEvents() {
   document.getElementById("monthlyCards").addEventListener("click", (event) => {
     const card = event.target.closest("[data-month-card]");
     if (card) openMonthlyModal(card.dataset.monthCard, card);
+  });
+  document.getElementById("monthlyBaseInput").addEventListener("change", (event) => {
+    if (!event.target.value) return;
+    state.settings.analysisBaseMonth = event.target.value;
+    if (state.settings.analysisCompareMonth === event.target.value) {
+      state.settings.analysisCompareMonth = shiftMonthKey(event.target.value, -1);
+    }
+    saveState();
+    renderMonthlyCards();
+  });
+  document.getElementById("monthlyCompareInput").addEventListener("change", (event) => {
+    if (!event.target.value) return;
+    state.settings.analysisCompareMonth = event.target.value;
+    if (state.settings.analysisBaseMonth === event.target.value) {
+      state.settings.analysisBaseMonth = shiftMonthKey(event.target.value, 1);
+    }
+    saveState();
+    renderMonthlyCards();
+  });
+  document.getElementById("weeklyMonthInput").addEventListener("change", (event) => {
+    if (!event.target.value) return;
+    state.settings.analysisWeekMonth = event.target.value;
+    state.settings.analysisWeekBase = "";
+    state.settings.analysisWeekCompare = "";
+    saveState();
+    renderWeeklyCards();
+  });
+  document.getElementById("weeklyBaseInput").addEventListener("change", (event) => {
+    state.settings.analysisWeekBase = event.target.value;
+    if (state.settings.analysisWeekCompare === event.target.value) {
+      const weeks = getMonthWeeks(state.settings.analysisWeekMonth);
+      const index = weeks.findIndex((week) => week.key === event.target.value);
+      state.settings.analysisWeekCompare = weeks[Math.max(0, index - 1)]?.key === event.target.value
+        ? weeks[Math.min(weeks.length - 1, index + 1)]?.key
+        : weeks[Math.max(0, index - 1)]?.key;
+    }
+    saveState();
+    renderWeeklyCards();
+  });
+  document.getElementById("weeklyCompareInput").addEventListener("change", (event) => {
+    state.settings.analysisWeekCompare = event.target.value;
+    if (state.settings.analysisWeekBase === event.target.value) {
+      const weeks = getMonthWeeks(state.settings.analysisWeekMonth);
+      const index = weeks.findIndex((week) => week.key === event.target.value);
+      state.settings.analysisWeekBase = weeks[Math.min(weeks.length - 1, index + 1)]?.key === event.target.value
+        ? weeks[Math.max(0, index - 1)]?.key
+        : weeks[Math.min(weeks.length - 1, index + 1)]?.key;
+    }
+    saveState();
+    renderWeeklyCards();
+  });
+  document.getElementById("weeklyCards").addEventListener("click", (event) => {
+    const card = event.target.closest("[data-week-card]");
+    if (card) openWeeklyModal(card.dataset.weekMonth, card.dataset.weekCard, card);
   });
   document.getElementById("closeMonthlyModalBtn").addEventListener("click", closeMonthlyModal);
   document.getElementById("monthlyModal").addEventListener("click", (event) => {

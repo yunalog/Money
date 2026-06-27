@@ -254,15 +254,42 @@
           <div class="panel-title-row monthly-section-head">
             <div>
               <p class="eyebrow">Monthly flow</p>
-              <h2>월별 수입과 자산 흐름</h2>
-              <p>수입을 기준으로 지출과 저축이 차지한 비율을 확인하세요.</p>
+              <h2>월별 비교</h2>
+              <p>비교할 두 달을 고르고 수입·지출·저축과 남은 예산을 확인하세요.</p>
             </div>
-            <span class="monthly-legend">
-              <i class="expense-dot"></i>지출
-              <i class="saving-dot"></i>저축
-            </span>
+            <div class="period-compare-controls">
+              <label><span>기준 월</span><input id="monthlyBaseInput" type="month" /></label>
+              <i>vs</i>
+              <label><span>비교 월</span><input id="monthlyCompareInput" type="month" /></label>
+            </div>
           </div>
+          <span class="monthly-legend">
+            <i class="expense-dot"></i>지출
+            <i class="saving-dot"></i>저축
+            <small>링은 전체 수입 대비 비율입니다.</small>
+          </span>
           <div id="monthlyCards" class="monthly-card-grid"></div>
+        </section>
+
+        <section id="weeklySection" class="panel weekly-section">
+          <div class="panel-title-row weekly-section-head">
+            <div>
+              <p class="eyebrow purple">Weekly budget</p>
+              <h2>주별 예산 비교</h2>
+              <p>선택한 달의 주차별 지출과 사용 가능한 예산을 비교하세요.</p>
+            </div>
+            <div class="weekly-period-controls">
+              <label><span>확인할 달</span><input id="weeklyMonthInput" type="month" /></label>
+              <label><span>기준 주</span><select id="weeklyBaseInput"></select></label>
+              <i>vs</i>
+              <label><span>비교 주</span><select id="weeklyCompareInput"></select></label>
+            </div>
+          </div>
+          <div class="weekly-budget-note">
+            <span>i</span>
+            <p>주 예산은 월 예산을 해당 주가 차지하는 일수만큼 나누어 계산해요.</p>
+          </div>
+          <div id="weeklyCards" class="weekly-card-grid"></div>
         </section>
 
         <div class="dashboard-bottom">
@@ -513,6 +540,7 @@
               <label class="toggle-row"><span><strong>상단 자산 요약</strong><small>총자산, 저축액, 수입, 지출</small></span><input type="checkbox" data-setting="showSummary" checked /><i></i></label>
               <label class="toggle-row"><span><strong>예산·저축 비율</strong><small>전체 예산 사용률과 저축 비율</small></span><input type="checkbox" data-setting="showRatios" checked /><i></i></label>
               <label class="toggle-row"><span><strong>월별 자산 흐름</strong><small>월별 수입과 지출·저축 비율</small></span><input type="checkbox" data-setting="showMonthly" checked /><i></i></label>
+              <label class="toggle-row"><span><strong>주별 예산 흐름</strong><small>주별 배정 예산과 남은 금액</small></span><input type="checkbox" data-setting="showWeekly" checked /><i></i></label>
               <label class="toggle-row"><span><strong>최근 거래</strong><small>최근 기록한 거래 5건</small></span><input type="checkbox" data-setting="showRecent" checked /><i></i></label>
               <label class="toggle-row"><span><strong>다가오는 자동이체</strong><small>이번 달 남은 자동이체 일정</small></span><input type="checkbox" data-setting="showUpcoming" checked /><i></i></label>
             </div>
