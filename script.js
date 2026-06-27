@@ -87,6 +87,9 @@ const CATEGORY_COLORS = ["sage", "sky", "peach", "lilac", "yellow", "rose"];
 let activePage = "dashboard";
 let transactionType = "expense";
 let transactionFilter = "all";
+let transactionDateFilterStart = "";
+let transactionDateFilterEnd = "";
+let editingTransactionId = "";
 let categoryFilter = "all";
 let recurringType = "income";
 let viewedMonth = "2026-06";
@@ -306,11 +309,46 @@ async function readBackupState() {
 function resetRuntimeFilters() {
   transactionType = "expense";
   transactionFilter = "all";
+  transactionDateFilterStart = "";
+  transactionDateFilterEnd = "";
+  editingTransactionId = "";
   categoryFilter = "all";
   recurringType = "income";
   viewedMonth = TODAY.toISOString().slice(0, 7);
 }
 
+
+function migrateCategories(categories, defaults, { fillMissingDefaults = false } = {}) {
+  const source = Array.isArray(categories) && categories.length ? categories : defaults.categories;
+  const unique = [];
+  const seen = new Set();
+
+  source.forEach((category) => {
+    if (!category) return;
+    const key = category.id || `${category.type || ""}:${category.name || ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push({ ...category });
+  });
+
+  if (fillMissingDefaults) {
+    defaults.categories.forEach((category) => {
+      if (!unique.some((savedCategory) => savedCategory.id === category.id)) {
+        unique.push({ ...category });
+      }
+    });
+  }
+
+  unique.forEach((category) => {
+    if (category.type === "expense" && !category.group) {
+      category.group = category.id === "cat-house" ? "fixed" : "variable";
+    }
+    category.group ||= "";
+    category.enabled = category.enabled !== false;
+  });
+
+  return unique;
+}
 
 function loadState(email) {
   try {
@@ -323,19 +361,8 @@ function loadState(email) {
     if (!saved) return createDefaultState();
     const parsed = JSON.parse(saved);
     const defaults = createDefaultState();
-    const parsedCategories = Array.isArray(parsed.categories) ? parsed.categories : defaults.categories;
-    const migratedCategories = parsed.schemaVersion === 4
-      ? parsedCategories
-      : [
-          ...parsedCategories,
-          ...defaults.categories.filter((category) => !parsedCategories.some((savedCategory) => savedCategory.id === category.id)),
-        ];
-    migratedCategories.forEach((category) => {
-      if (category.type === "expense" && !category.group) {
-        category.group = category.id === "cat-house" ? "fixed" : "variable";
-      }
-      category.group ||= "";
-      category.enabled = category.enabled !== false;
+    const migratedCategories = migrateCategories(parsed.categories, defaults, {
+      fillMissingDefaults: !Array.isArray(parsed.categories),
     });
 
     return {
@@ -383,20 +410,8 @@ async function loadStateFromFirebase(user) {
     return freshState;
   }
 
-  const parsedCategories = Array.isArray(data.categories) ? data.categories : defaults.categories;
-  const migratedCategories = data.schemaVersion === 4
-    ? parsedCategories
-    : [
-        ...parsedCategories,
-        ...defaults.categories.filter((category) => !parsedCategories.some((savedCategory) => savedCategory.id === category.id)),
-      ];
-
-  migratedCategories.forEach((category) => {
-    if (category.type === "expense" && !category.group) {
-      category.group = category.id === "cat-house" ? "fixed" : "variable";
-    }
-    category.group ||= "";
-    category.enabled = category.enabled !== false;
+  const migratedCategories = migrateCategories(data.categories, defaults, {
+    fillMissingDefaults: !Array.isArray(data.categories),
   });
 
   const profileName = resolveProfileName(pendingProfile?.name, user.displayName, data.profile?.name);
@@ -1710,13 +1725,17 @@ function renderTransactionHistory() {
   const list = monthTransactions(viewedMonth)
     .filter(isTransactionEnabled)
     .filter((item) => transactionFilter === "all" || item.type === transactionFilter)
+    .filter((item) => !transactionDateFilterStart || item.date >= transactionDateFilterStart)
+    .filter((item) => !transactionDateFilterEnd || item.date <= transactionDateFilterEnd)
     .sort((a, b) => b.date.localeCompare(a.date) || Number(b.createdAt || 0) - Number(a.createdAt || 0));
 
-  const income = sumVisibleByType("income", viewedMonth);
-  const expenses = sumVisibleByType("expense", viewedMonth);
-  const savings = sumVisibleByType("saving", viewedMonth);
+  const filteredNet = list.reduce((sum, item) => {
+    if (item.type === "income") return sum + Number(item.amount || 0);
+    if (item.type === "expense" || item.type === "saving") return sum - Number(item.amount || 0);
+    return sum;
+  }, 0);
   document.getElementById("transactionMonthLabel").textContent = formatMonth(viewedMonth);
-  document.getElementById("monthNetTotal").textContent = formatSignedWon(income - expenses - savings);
+  document.getElementById("monthNetTotal").textContent = formatSignedWon(filteredNet);
 
   if (!list.length) {
     target.innerHTML = emptyState("이 달에는 조건에 맞는 거래가 없어요.");
@@ -1756,7 +1775,7 @@ function transactionRowHtml(item) {
   const sign = meta.sign || "";
   const transferLabel = item.type === "transfer" && targetAccount ? `${paymentAssetName(item)} → ${targetAccount.name}` : paymentAssetName(item);
   return `
-    <div class="transaction-row">
+    <div class="transaction-row ${editingTransactionId === item.id ? "editing" : ""}" data-edit-transaction="${escapeHtml(item.id)}" tabindex="0" role="button" aria-label="${escapeHtml(item.memo || meta.label)} 거래 수정">
       <span class="cell date-cell">${formatDate(item.date, { month: "2-digit", day: "2-digit" })}</span>
       <span class="cell category-cell"><i class="category-mini ${escapeHtml(category?.color || "sage")}">${escapeHtml(category?.icon || meta.icon)}</i><b>${escapeHtml(category?.name || meta.label)}</b></span>
       <span class="cell account-cell"><i>${paymentAssetIcon(item)}</i>${escapeHtml(transferLabel)}</span>
@@ -1767,7 +1786,7 @@ function transactionRowHtml(item) {
   `;
 }
 
-function addTransaction() {
+function buildTransactionFromForm(id = uid("tx"), createdAt = Date.now()) {
   const date = document.getElementById("transactionDateInput").value;
   const categoryId = document.getElementById("transactionCategoryInput").value;
   const paymentMethodInput = document.getElementById("transactionPaymentMethodInput");
@@ -1781,35 +1800,8 @@ function addTransaction() {
   const memo = document.getElementById("transactionMemoInput").value.trim();
   const amount = parseMoneyInput(document.getElementById("transactionAmountInput").value);
 
-  if (!date || !memo || !amount || amount <= 0) {
-    setHint("transactionFormHint", "날짜, 사용 내역과 금액을 모두 입력해주세요.", true);
-    return;
-  }
-  if (transactionType !== "transfer" && !categoryId) {
-    setHint("transactionFormHint", "거래에 맞는 카테고리를 선택해주세요.", true);
-    return;
-  }
-  if (transactionType === "transfer" && (!paymentAssetId || !targetAccountId || targetAccountId === paymentAssetId)) {
-    setHint("transactionFormHint", "서로 다른 보내는 통장과 받는 통장을 선택해주세요.", true);
-    return;
-  }
-  if (transactionType === "income" && !paymentAssetId) {
-    setHint("transactionFormHint", "입금 계좌를 선택해주세요.", true);
-    return;
-  }
-  if (transactionType === "expense") {
-    if (method === "card" && !getCard(paymentAssetId)) {
-      setHint("transactionFormHint", "사용할 카드를 선택해주세요.", true);
-      return;
-    }
-    if (method === "transfer" && !getAccount(paymentAssetId)) {
-      setHint("transactionFormHint", "출금 계좌를 선택해주세요.", true);
-      return;
-    }
-  }
-
-  const transaction = {
-    id: uid("tx"),
+  return {
+    id,
     type: transactionType,
     categoryId: transactionType === "transfer" ? "" : categoryId,
     accountId,
@@ -1819,20 +1811,108 @@ function addTransaction() {
     amount,
     memo,
     date,
-    createdAt: Date.now(),
+    createdAt,
   };
+}
 
-  state.transactions.push(transaction);
-  applyTransactionToAssets(transaction, 1);
+function validateTransactionForm(transaction) {
+  if (!transaction.date || !transaction.memo || !transaction.amount || transaction.amount <= 0) {
+    setHint("transactionFormHint", "날짜, 사용 내역과 금액을 모두 입력해주세요.", true);
+    return false;
+  }
+  if (transaction.type !== "transfer" && !transaction.categoryId) {
+    setHint("transactionFormHint", "거래에 맞는 카테고리를 선택해주세요.", true);
+    return false;
+  }
+  if (transaction.type === "transfer" && (!transaction.paymentAssetId || !transaction.targetAccountId || transaction.targetAccountId === transaction.paymentAssetId)) {
+    setHint("transactionFormHint", "서로 다른 보내는 통장과 받는 통장을 선택해주세요.", true);
+    return false;
+  }
+  if (transaction.type === "income" && !transaction.paymentAssetId) {
+    setHint("transactionFormHint", "입금 계좌를 선택해주세요.", true);
+    return false;
+  }
+  if (transaction.type === "expense") {
+    if (transaction.paymentMethod === "card" && !getCard(transaction.paymentAssetId)) {
+      setHint("transactionFormHint", "사용할 카드를 선택해주세요.", true);
+      return false;
+    }
+    if (transaction.paymentMethod === "transfer" && !getAccount(transaction.paymentAssetId)) {
+      setHint("transactionFormHint", "출금 계좌를 선택해주세요.", true);
+      return false;
+    }
+  }
+  return true;
+}
 
-  saveState();
-  viewedMonth = date.slice(0, 7);
+function resetTransactionForm({ keepDate = true } = {}) {
+  editingTransactionId = "";
   document.getElementById("transactionMemoInput").value = "";
   document.getElementById("transactionAmountInput").value = "";
+  if (!keepDate) document.getElementById("transactionDateInput").value = TODAY.toISOString().slice(0, 10);
+  document.getElementById("sendTransactionBtn").querySelector("span").textContent = "보내기";
+  document.getElementById("cancelTransactionEditBtn")?.classList.add("hidden");
   syncTransactionAmountPreview({ keepLast: true });
+}
+
+function startEditTransaction(id) {
+  const item = state.transactions.find((transaction) => transaction.id === id);
+  if (!item) return;
+
+  editingTransactionId = id;
+  transactionType = item.type;
+  viewedMonth = item.date.slice(0, 7);
+  renderTransactionComposer();
+
+  document.getElementById("transactionDateInput").value = item.date;
+  document.getElementById("transactionMemoInput").value = item.memo || "";
+  document.getElementById("transactionAmountInput").value = formatMoneyInput(item.amount || 0);
+
+  if (item.type !== "transfer") {
+    document.getElementById("transactionCategoryInput").value = item.categoryId || "";
+    document.getElementById("transactionPaymentMethodInput").value = item.paymentMethod || "transfer";
+    renderPaymentOptions();
+    document.getElementById("transactionPaymentAssetInput").value = item.paymentAssetId || item.accountId || "";
+    document.getElementById("transactionAccountInput").value = item.accountId || item.paymentAssetId || "";
+  } else {
+    document.getElementById("transactionAccountInput").value = item.accountId || item.paymentAssetId || "";
+    document.getElementById("transactionTargetAccountInput").value = item.targetAccountId || "";
+  }
+
+  syncTransactionAmountPreview();
+  document.getElementById("sendTransactionBtn").querySelector("span").textContent = "수정 완료";
+  document.getElementById("cancelTransactionEditBtn")?.classList.remove("hidden");
+  setHint("transactionFormHint", "선택한 거래를 수정 중이에요. 내용을 바꾸고 수정 완료를 눌러주세요.");
+  document.querySelector(".composer-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  renderTransactionHistory();
+}
+
+function addTransaction() {
+  const oldTransaction = editingTransactionId
+    ? state.transactions.find((transaction) => transaction.id === editingTransactionId)
+    : null;
+  const transaction = buildTransactionFromForm(oldTransaction?.id || uid("tx"), oldTransaction?.createdAt || Date.now());
+
+  if (!validateTransactionForm(transaction)) return;
+
+  if (oldTransaction) {
+    applyTransactionToAssets(oldTransaction, -1);
+    const index = state.transactions.findIndex((item) => item.id === oldTransaction.id);
+    state.transactions[index] = transaction;
+    applyTransactionToAssets(transaction, 1);
+    editingTransactionId = "";
+    showToast("거래를 수정했어요.");
+  } else {
+    state.transactions.push(transaction);
+    applyTransactionToAssets(transaction, 1);
+    showToast("거래를 기록했어요.");
+  }
+
+  saveState();
+  viewedMonth = transaction.date.slice(0, 7);
+  resetTransactionForm();
   renderAll();
   showPage("transactions");
-  showToast("거래를 기록했어요.");
 }
 
 function removeTransaction(id) {
@@ -1842,6 +1922,7 @@ function removeTransaction(id) {
   applyTransactionToAssets(item, -1);
 
   state.transactions = state.transactions.filter((transaction) => transaction.id !== id);
+  if (editingTransactionId === id) resetTransactionForm();
   saveState();
   renderAll();
   showToast("거래를 삭제했어요.");
@@ -2666,7 +2747,13 @@ function bindEvents() {
   document.getElementById("transactionPaymentAssetInput").addEventListener("change", (event) => {
     if (state.accounts.some((account) => account.id === event.target.value)) document.getElementById("transactionAccountInput").value = event.target.value;
   });
+  document.getElementById("sendTransactionBtn").insertAdjacentHTML("afterend", `<button id="cancelTransactionEditBtn" class="secondary-btn transaction-edit-cancel hidden" type="button">수정 취소</button>`);
   document.getElementById("sendTransactionBtn").addEventListener("click", addTransaction);
+  document.getElementById("cancelTransactionEditBtn").addEventListener("click", () => {
+    resetTransactionForm();
+    renderTransactionHistory();
+    showToast("거래 수정을 취소했어요.");
+  });
   document.addEventListener("input", (event) => {
     if (event.target.matches(".money-input, [data-category-budget]")) syncMoneyInput(event.target);
   });
@@ -2682,11 +2769,39 @@ function bindEvents() {
     document.querySelectorAll("#transactionFilters button").forEach((item) => item.classList.toggle("active", item === button));
     renderTransactionHistory();
   });
+  document.getElementById("transactionDateFilterStart")?.addEventListener("change", (event) => {
+    transactionDateFilterStart = event.target.value;
+    renderTransactionHistory();
+  });
+  document.getElementById("transactionDateFilterEnd")?.addEventListener("change", (event) => {
+    transactionDateFilterEnd = event.target.value;
+    renderTransactionHistory();
+  });
+  document.getElementById("clearTransactionDateFilterBtn")?.addEventListener("click", () => {
+    transactionDateFilterStart = "";
+    transactionDateFilterEnd = "";
+    document.getElementById("transactionDateFilterStart").value = "";
+    document.getElementById("transactionDateFilterEnd").value = "";
+    renderTransactionHistory();
+  });
   document.getElementById("prevMonthBtn").addEventListener("click", () => moveViewedMonth(-1));
   document.getElementById("nextMonthBtn").addEventListener("click", () => moveViewedMonth(1));
   document.getElementById("transactionHistory").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-delete-transaction]");
-    if (button) removeTransaction(button.dataset.deleteTransaction);
+    const deleteButton = event.target.closest("[data-delete-transaction]");
+    if (deleteButton) {
+      event.stopPropagation();
+      removeTransaction(deleteButton.dataset.deleteTransaction);
+      return;
+    }
+    const row = event.target.closest("[data-edit-transaction]");
+    if (row) startEditTransaction(row.dataset.editTransaction);
+  });
+  document.getElementById("transactionHistory").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target.closest("[data-edit-transaction]");
+    if (!row) return;
+    event.preventDefault();
+    startEditTransaction(row.dataset.editTransaction);
   });
 
   document.getElementById("saveCashBtn").addEventListener("click", saveCashBalance);

@@ -167,7 +167,6 @@
           <article class="metric-card metric-main">
             <div class="metric-top">
               <span class="metric-icon">₩</span>
-              <span class="metric-trend positive">↑ 4.2%</span>
             </div>
             <p>총자산</p>
             <strong id="totalAsset">0원</strong>
@@ -176,7 +175,6 @@
           <article id="savingsMetricCard" class="metric-card">
             <div class="metric-top">
               <span class="metric-icon lilac">✦</span>
-              <span class="metric-trend positive">↑ 8.1%</span>
             </div>
             <p>총 저축액</p>
             <strong id="totalSavings">0원</strong>
@@ -410,9 +408,14 @@
           <p id="transactionFormHint" class="form-hint" role="status"></p>
         </article>
 
-        <div class="list-toolbar">
+        <div class="list-toolbar transaction-toolbar">
           <div class="filter-chips" id="transactionFilters"></div>
-          <div class="month-total"><span>이번 달 흐름</span><strong id="monthNetTotal">0원</strong></div>
+          <div class="transaction-date-filter" aria-label="거래 날짜 필터">
+            <label><span>시작일</span><input id="transactionDateFilterStart" type="date" /></label>
+            <label><span>종료일</span><input id="transactionDateFilterEnd" type="date" /></label>
+            <button id="clearTransactionDateFilterBtn" class="secondary-btn" type="button">초기화</button>
+          </div>
+          <div class="month-total"><span>선택 내역 흐름</span><strong id="monthNetTotal">0원</strong></div>
         </div>
 
         <article id="transactionHistory" class="history-card"></article>
