@@ -319,7 +319,7 @@ function resetRuntimeFilters() {
 
 
 function migrateCategories(categories, defaults, { fillMissingDefaults = false } = {}) {
-  const source = Array.isArray(categories) && categories.length ? categories : defaults.categories;
+  const source = Array.isArray(categories) ? categories : defaults.categories;
   const unique = [];
   const seen = new Set();
 
@@ -1720,22 +1720,28 @@ function syncAccountFromCategory() {
   }
 }
 
+function transactionIncomeMinusExpense(items) {
+  return items.reduce((sum, item) => {
+    if (item.type === "income") return sum + Number(item.amount || 0);
+    if (item.type === "expense") return sum - Number(item.amount || 0);
+    return sum;
+  }, 0);
+}
+
 function renderTransactionHistory() {
   const target = document.getElementById("transactionHistory");
-  const list = monthTransactions(viewedMonth)
-    .filter(isTransactionEnabled)
+  const baseList = monthTransactions(viewedMonth).filter(isTransactionEnabled);
+  const list = baseList
     .filter((item) => transactionFilter === "all" || item.type === transactionFilter)
     .filter((item) => !transactionDateFilterStart || item.date >= transactionDateFilterStart)
     .filter((item) => !transactionDateFilterEnd || item.date <= transactionDateFilterEnd)
     .sort((a, b) => b.date.localeCompare(a.date) || Number(b.createdAt || 0) - Number(a.createdAt || 0));
 
-  const filteredNet = list.reduce((sum, item) => {
-    if (item.type === "income") return sum + Number(item.amount || 0);
-    if (item.type === "expense" || item.type === "saving") return sum - Number(item.amount || 0);
-    return sum;
-  }, 0);
+  const monthNet = transactionIncomeMinusExpense(baseList);
+  const selectedNet = transactionIncomeMinusExpense(list);
   document.getElementById("transactionMonthLabel").textContent = formatMonth(viewedMonth);
-  document.getElementById("monthNetTotal").textContent = formatSignedWon(filteredNet);
+  document.getElementById("monthNetTotal").textContent = formatSignedWon(monthNet);
+  document.getElementById("selectedNetTotal").textContent = formatSignedWon(selectedNet);
 
   if (!list.length) {
     target.innerHTML = emptyState("이 달에는 조건에 맞는 거래가 없어요.");
@@ -2793,11 +2799,15 @@ function bindEvents() {
       removeTransaction(deleteButton.dataset.deleteTransaction);
       return;
     }
+
     const row = event.target.closest("[data-edit-transaction]");
-    if (row) startEditTransaction(row.dataset.editTransaction);
+    if (!row) return;
+    startEditTransaction(row.dataset.editTransaction);
   });
   document.getElementById("transactionHistory").addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
+    if (event.target.closest("[data-delete-transaction]")) return;
+
     const row = event.target.closest("[data-edit-transaction]");
     if (!row) return;
     event.preventDefault();

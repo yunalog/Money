@@ -409,13 +409,18 @@
         </article>
 
         <div class="list-toolbar transaction-toolbar">
-          <div class="filter-chips" id="transactionFilters"></div>
-          <div class="transaction-date-filter" aria-label="거래 날짜 필터">
-            <label><span>시작일</span><input id="transactionDateFilterStart" type="date" /></label>
-            <label><span>종료일</span><input id="transactionDateFilterEnd" type="date" /></label>
-            <button id="clearTransactionDateFilterBtn" class="secondary-btn" type="button">초기화</button>
+          <div class="transaction-toolbar-controls">
+            <div class="filter-chips" id="transactionFilters"></div>
+            <div class="transaction-date-filter" aria-label="거래 날짜 필터">
+              <label><span>시작일</span><input id="transactionDateFilterStart" type="date" /></label>
+              <label><span>종료일</span><input id="transactionDateFilterEnd" type="date" /></label>
+              <button id="clearTransactionDateFilterBtn" class="secondary-btn" type="button">초기화</button>
+            </div>
           </div>
-          <div class="month-total"><span>선택 내역 흐름</span><strong id="monthNetTotal">0원</strong></div>
+          <div class="transaction-flow-summary">
+            <div class="month-total"><span>이번 달 흐름</span><strong id="monthNetTotal">0원</strong></div>
+            <div class="month-total selected-flow-total"><span>선택 내역 흐름</span><strong id="selectedNetTotal">0원</strong></div>
+          </div>
         </div>
 
         <article id="transactionHistory" class="history-card"></article>
