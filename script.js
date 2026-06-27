@@ -371,10 +371,7 @@ async function loadStateFromFirebase(user) {
 
   if (!data) {
     const profileName = resolveProfileName(pendingProfile?.name, user.displayName);
-    const freshState = createBlankState({
-      name: profileName,
-      email: user.email || pendingProfile?.email || "",
-    });
+    const freshState = createDefaultState();
     freshState.profile = {
       name: profileName,
       email: user.email || pendingProfile?.email || "",
@@ -606,11 +603,11 @@ async function handleAuthSubmit(event) {
       const user = await signUpWithEmail({ name, email, password });
 
       currentUser = { uid: user.uid, name, email };
-      state = createBlankState({ name, email });
+      state = createDefaultState();
       state.profile = { name, email };
       await saveStateToFirebase();
       clearPendingSignupProfile(email);
-      showToast(`${name}님, 모아에 오신 걸 환영해요.`);
+      showToast(`${name}님, 모아에 오신 걸 환영해요. 데모 데이터로 먼저 시작해볼게요.`);
       return;
     }
 
@@ -642,6 +639,39 @@ function formatWon(value, forceFull = false) {
     if (abs >= 10000) return `${sign}${Math.round(abs / 10000).toLocaleString("ko-KR")}만원`;
   }
   return `${amount.toLocaleString("ko-KR")}원`;
+}
+
+function parseMoneyInput(value) {
+  return Number(String(value || "").replace(/[^0-9]/g, ""));
+}
+
+function formatKoreanMoney(value) {
+  const amount = parseMoneyInput(value);
+  if (!amount) return "";
+
+  const eok = Math.floor(amount / 100000000);
+  const man = Math.floor((amount % 100000000) / 10000);
+  const belowMan = amount % 10000;
+  const cheon = Math.floor(belowMan / 1000);
+  const rest = belowMan % 1000;
+
+  let result = "";
+  if (eok) result += `${eok}억`;
+  if (man) result += `${man}만`;
+  if (cheon) result += `${cheon}천`;
+  if (rest) result += `${rest}`;
+
+  return `${result}원`;
+}
+
+function syncTransactionAmountPreview() {
+  const input = document.getElementById("transactionAmountInput");
+  const preview = document.getElementById("transactionAmountPreview");
+  if (!input || !preview) return;
+
+  const raw = String(input.value || "").replace(/[^0-9]/g, "");
+  input.value = raw ? Number(raw).toLocaleString("ko-KR") : "";
+  preview.textContent = raw ? formatKoreanMoney(raw) : "";
 }
 
 function formatSignedWon(value) {
@@ -1560,7 +1590,7 @@ function addTransaction() {
   const accountId = transactionType === "transfer" ? paymentAssetId : (method === "transfer" ? paymentAssetId : "");
   const targetAccountId = document.getElementById("transactionTargetAccountInput").value;
   const memo = document.getElementById("transactionMemoInput").value.trim();
-  const amount = Number(document.getElementById("transactionAmountInput").value);
+  const amount = parseMoneyInput(document.getElementById("transactionAmountInput").value);
 
   if (!date || !memo || !amount || amount <= 0) {
     setHint("transactionFormHint", "날짜, 사용 내역과 금액을 모두 입력해주세요.", true);
@@ -1610,6 +1640,7 @@ function addTransaction() {
   viewedMonth = date.slice(0, 7);
   document.getElementById("transactionMemoInput").value = "";
   document.getElementById("transactionAmountInput").value = "";
+  syncTransactionAmountPreview();
   renderAll();
   showPage("transactions");
   showToast("거래를 기록했어요.");
@@ -2415,6 +2446,7 @@ function bindEvents() {
     if (state.accounts.some((account) => account.id === event.target.value)) document.getElementById("transactionAccountInput").value = event.target.value;
   });
   document.getElementById("sendTransactionBtn").addEventListener("click", addTransaction);
+  document.getElementById("transactionAmountInput").addEventListener("input", syncTransactionAmountPreview);
   document.getElementById("transactionAmountInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") addTransaction();
   });

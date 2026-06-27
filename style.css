@@ -4859,3 +4859,14 @@ h2 { font-size: 22px; }
   width: 100%;
   margin-top: -5px;
 }
+
+
+.amount-korean-preview {
+  min-height: 18px;
+  margin: 6px 2px 0;
+  color: var(--green);
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+}

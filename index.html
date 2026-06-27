@@ -379,9 +379,10 @@
             <label class="field amount-field">
               <span>금액</span>
               <div class="amount-input-wrap">
-                <input id="transactionAmountInput" type="number" min="0" step="100" placeholder="0" />
+                <input id="transactionAmountInput" type="text" inputmode="numeric" autocomplete="off" placeholder="0" />
                 <b>원</b>
               </div>
+              <p id="transactionAmountPreview" class="amount-korean-preview" aria-live="polite"></p>
             </label>
             <button id="sendTransactionBtn" class="send-btn" type="button" aria-label="거래 등록">
               <span>보내기</span><i>↑</i>
