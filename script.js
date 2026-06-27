@@ -70,6 +70,7 @@ let viewedMonth = "2026-06";
 let authMode = "login";
 let currentUser = null;
 let state = createDefaultState();
+let lastMonthlyTrigger = null;
 
 function uid(prefix) {
   if (window.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
@@ -138,6 +139,7 @@ function createDefaultState() {
     settings: {
       showSummary: true,
       showRatios: true,
+      showMonthly: true,
       showRecent: true,
       showUpcoming: true,
       amountDisplay: "full",
@@ -285,6 +287,7 @@ function logout() {
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   currentUser = null;
   state = createDefaultState();
+  closeMonthlyModal();
   setProfilePopover(false);
   document.getElementById("app").classList.add("hidden");
   document.getElementById("authPage").classList.remove("hidden");
@@ -449,6 +452,29 @@ function sumVisibleByType(type, month = viewedMonth) {
     .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 }
 
+function recentMonthKeys(count = 6) {
+  return Array.from({ length: count }, (_, index) => {
+    const offset = index - (count - 1);
+    const date = new Date(TODAY.getFullYear(), TODAY.getMonth() + offset, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  });
+}
+
+function monthlyFlow(month) {
+  const income = sumVisibleByType("income", month);
+  const expense = sumVisibleByType("expense", month);
+  const saving = sumVisibleByType("saving", month);
+  return {
+    month,
+    income,
+    expense,
+    saving,
+    expenseRate: income ? Math.round((expense / income) * 100) : 0,
+    savingRate: income ? Math.round((saving / income) * 100) : 0,
+    remaining: income - expense - saving,
+  };
+}
+
 function totalAssets() {
   return state.accounts.reduce((sum, account) => sum + Number(account.balance || 0), 0);
 }
@@ -543,10 +569,108 @@ function renderDashboard() {
     : `권장 저축 비율 20%까지 ${20 - savingRate}%p 남았어요.`;
   document.getElementById("savingStatusBadge").textContent = savingRate >= 20 ? "좋은 흐름" : "조금 더";
 
+  renderMonthlyCards();
   renderRecentTransactions();
   renderUpcoming();
   applyDashboardVisibility();
   applyManagementVisibility();
+}
+
+function renderMonthlyCards() {
+  const target = document.getElementById("monthlyCards");
+  const currentMonth = TODAY.toISOString().slice(0, 7);
+  target.innerHTML = recentMonthKeys().map((month) => {
+    const flow = monthlyFlow(month);
+    const [year, monthNumber] = month.split("-").map(Number);
+    const ringBase = flow.income || flow.expense + flow.saving;
+    const expenseEnd = ringBase ? Math.min((flow.expense / ringBase) * 360, 360) : 0;
+    const savingEnd = ringBase
+      ? Math.min(expenseEnd + (flow.saving / ringBase) * 360, 360)
+      : 0;
+    const hasData = flow.income + flow.expense + flow.saving > 0;
+    const expenseRateLabel = flow.income ? `${flow.expenseRate}%` : "—";
+    const savingRateLabel = flow.income ? `${flow.savingRate}%` : "—";
+    return `
+      <button class="monthly-flow-card ${month === currentMonth ? "current" : ""} ${hasData ? "" : "empty"}" type="button" data-month-card="${month}" aria-label="${year}년 ${monthNumber}월 상세 보기">
+        <div class="monthly-card-head">
+          <div><span>${year}년</span><strong>${monthNumber}월</strong></div>
+          ${month === currentMonth ? `<em>이번 달</em>` : `<i>상세 보기 →</i>`}
+        </div>
+        <div class="monthly-ring" style="--expense-end:${expenseEnd}deg; --saving-end:${savingEnd}deg">
+          <div class="monthly-ring-center">
+            <small>전체 수입</small>
+            <strong>${formatWon(flow.income)}</strong>
+          </div>
+        </div>
+        <div class="monthly-flow-values">
+          <div><span><i class="expense-dot"></i>지출 <b>${expenseRateLabel}</b></span><strong>${formatWon(flow.expense)}</strong></div>
+          <div><span><i class="saving-dot"></i>저축 <b>${savingRateLabel}</b></span><strong>${formatWon(flow.saving)}</strong></div>
+        </div>
+        <div class="monthly-card-foot ${flow.remaining < 0 ? "negative" : ""}">
+          <span>수입에서 남은 금액</span><strong>${formatWon(flow.remaining)}</strong>
+        </div>
+      </button>
+    `;
+  }).join("");
+}
+
+function openMonthlyModal(month, trigger) {
+  const flow = monthlyFlow(month);
+  const expenseItems = monthTransactions(month)
+    .filter((item) => item.type === "expense" && isTransactionEnabled(item));
+  const grouped = new Map();
+
+  expenseItems.forEach((item) => {
+    const category = getCategory(item.categoryId);
+    const key = category?.id || "uncategorized";
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        name: category?.name || "기타",
+        icon: category?.icon || "•",
+        color: category?.color || "sage",
+        group: category ? managementLabelForCategory(category) : "지출",
+        amount: 0,
+      });
+    }
+    grouped.get(key).amount += Number(item.amount);
+  });
+
+  const categories = [...grouped.values()].sort((a, b) => b.amount - a.amount);
+  document.getElementById("monthlyModalTitle").textContent = `${formatMonth(month)} 지출 상세`;
+  document.getElementById("monthlyModalExpenseTotal").textContent = formatWon(flow.expense);
+  document.getElementById("monthlyModalSummary").innerHTML = `
+    <div class="income-summary"><span>↙</span><p><small>전체 수입</small><strong>${formatWon(flow.income)}</strong></p></div>
+    <div class="expense-summary"><span>↗</span><p><small>전체 지출 · ${flow.income ? `${flow.expenseRate}%` : "비율 없음"}</small><strong>${formatWon(flow.expense)}</strong></p></div>
+    <div class="saving-summary"><span>✦</span><p><small>전체 저축 · ${flow.income ? `${flow.savingRate}%` : "비율 없음"}</small><strong>${formatWon(flow.saving)}</strong></p></div>
+  `;
+
+  const target = document.getElementById("monthlyCategoryBreakdown");
+  target.innerHTML = categories.length
+    ? categories.map((category) => {
+        const rate = flow.expense ? Math.round((category.amount / flow.expense) * 100) : 0;
+        return `
+          <div class="monthly-category-row">
+            <span class="category-dot ${escapeHtml(category.color)}">${escapeHtml(category.icon)}</span>
+            <div class="monthly-category-copy">
+              <div><p><strong>${escapeHtml(category.name)}</strong><small>${escapeHtml(category.group)}</small></p><p><strong>${formatWon(category.amount)}</strong><small>${rate}%</small></p></div>
+              <div class="progress-track"><i style="width:${Math.min(rate, 100)}%"></i></div>
+            </div>
+          </div>
+        `;
+      }).join("")
+    : emptyState("이 달에는 등록된 지출이 없어요.");
+
+  lastMonthlyTrigger = trigger || null;
+  document.getElementById("monthlyModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  document.getElementById("closeMonthlyModalBtn").focus();
+}
+
+function closeMonthlyModal() {
+  document.getElementById("monthlyModal").classList.add("hidden");
+  document.body.classList.remove("modal-open");
+  lastMonthlyTrigger?.focus();
+  lastMonthlyTrigger = null;
 }
 
 function renderRecentTransactions() {
@@ -1180,6 +1304,7 @@ function renderManagementItems() {
 function applyDashboardVisibility() {
   document.getElementById("summaryGrid").classList.toggle("hidden", !state.settings.showSummary);
   document.getElementById("ratioSection").classList.toggle("hidden", !state.settings.showRatios);
+  document.getElementById("monthlySection").classList.toggle("hidden", !state.settings.showMonthly);
   document.getElementById("recentSection").classList.toggle("hidden", !state.settings.showRecent);
   document.getElementById("upcomingSection").classList.toggle("hidden", !state.settings.showUpcoming);
   const bottom = document.querySelector(".dashboard-bottom");
@@ -1278,7 +1403,19 @@ function bindEvents() {
     if (!event.target.closest(".profile-menu-wrap")) setProfilePopover(false);
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setProfilePopover(false);
+    if (event.key === "Escape") {
+      setProfilePopover(false);
+      if (!document.getElementById("monthlyModal").classList.contains("hidden")) closeMonthlyModal();
+    }
+  });
+
+  document.getElementById("monthlyCards").addEventListener("click", (event) => {
+    const card = event.target.closest("[data-month-card]");
+    if (card) openMonthlyModal(card.dataset.monthCard, card);
+  });
+  document.getElementById("closeMonthlyModalBtn").addEventListener("click", closeMonthlyModal);
+  document.getElementById("monthlyModal").addEventListener("click", (event) => {
+    if (event.target.id === "monthlyModal") closeMonthlyModal();
   });
 
   document.getElementById("transactionTypeSegment").addEventListener("click", (event) => {
