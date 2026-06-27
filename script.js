@@ -1,4 +1,8 @@
 const STORAGE_KEY = "moa-money-v3";
+const USER_DATA_PREFIX = "moa-money-user-v1";
+const AUTH_ACCOUNTS_KEY = "moa-auth-accounts-v1";
+const AUTH_SESSION_KEY = "moa-auth-session-v1";
+const LEGACY_MIGRATION_KEY = "moa-legacy-data-owner-v1";
 const TODAY = new Date("2026-06-27T12:00:00+09:00");
 
 const TYPE_META = {
@@ -63,7 +67,9 @@ let transactionFilter = "all";
 let categoryFilter = "all";
 let recurringType = "income";
 let viewedMonth = "2026-06";
-let state = loadState();
+let authMode = "login";
+let currentUser = null;
+let state = createDefaultState();
 
 function uid(prefix) {
   if (window.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
@@ -143,9 +149,22 @@ function createDefaultState() {
   };
 }
 
-function loadState() {
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function userDataKey(email) {
+  return `${USER_DATA_PREFIX}:${encodeURIComponent(normalizeEmail(email))}`;
+}
+
+function loadState(email) {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    let saved = localStorage.getItem(userDataKey(email));
+    const legacyOwner = localStorage.getItem(LEGACY_MIGRATION_KEY);
+    if (!saved && !legacyOwner) {
+      saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) localStorage.setItem(LEGACY_MIGRATION_KEY, normalizeEmail(email));
+    }
     if (!saved) return createDefaultState();
     const parsed = JSON.parse(saved);
     const defaults = createDefaultState();
@@ -191,7 +210,142 @@ function loadState() {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!currentUser?.email) return;
+  localStorage.setItem(userDataKey(currentUser.email), JSON.stringify(state));
+}
+
+function readAuthAccounts() {
+  try {
+    const accounts = JSON.parse(localStorage.getItem(AUTH_ACCOUNTS_KEY) || "[]");
+    return Array.isArray(accounts) ? accounts : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeAuthAccounts(accounts) {
+  localStorage.setItem(AUTH_ACCOUNTS_KEY, JSON.stringify(accounts));
+}
+
+async function hashPassword(password) {
+  if (!window.crypto?.subtle) throw new Error("이 브라우저에서는 안전한 비밀번호 처리를 지원하지 않아요.");
+  const bytes = new TextEncoder().encode(`moa-local-auth:${password}`);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function setAuthHint(message, isError = false) {
+  const target = document.getElementById("authFormHint");
+  target.textContent = message;
+  target.classList.toggle("error", isError);
+}
+
+function showAuthMode(mode) {
+  authMode = mode === "signup" ? "signup" : "login";
+  const isSignup = authMode === "signup";
+  document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.authMode === authMode);
+  });
+  document.getElementById("authNameField").classList.toggle("hidden", !isSignup);
+  document.getElementById("authNameInput").required = isSignup;
+  document.getElementById("authPasswordInput").autocomplete = isSignup ? "new-password" : "current-password";
+  document.getElementById("authTitle").textContent = isSignup ? "처음 만나는 모아예요" : "다시 만나서 반가워요";
+  document.getElementById("authDescription").textContent = isSignup
+    ? "이메일, 이름, 비밀번호만으로 시작할 수 있어요."
+    : "이메일과 비밀번호로 로그인해주세요.";
+  document.getElementById("authSubmitBtn").textContent = isSignup ? "회원가입하고 시작하기" : "로그인";
+  document.getElementById("authSwitchText").textContent = isSignup ? "이미 계정이 있으신가요?" : "아직 계정이 없으신가요?";
+  document.getElementById("authSwitchBtn").textContent = isSignup ? "로그인" : "회원가입";
+  document.getElementById("authNameInput").value = "";
+  document.getElementById("authPasswordInput").value = "";
+  setAuthHint("");
+}
+
+function setAuthBusy(busy) {
+  const button = document.getElementById("authSubmitBtn");
+  button.disabled = busy;
+  if (busy) button.textContent = authMode === "signup" ? "계정을 만들고 있어요…" : "확인하고 있어요…";
+  else button.textContent = authMode === "signup" ? "회원가입하고 시작하기" : "로그인";
+}
+
+function startSession(account) {
+  currentUser = { name: account.name, email: normalizeEmail(account.email) };
+  sessionStorage.setItem(AUTH_SESSION_KEY, currentUser.email);
+  state = loadState(currentUser.email);
+  state.profile = { name: currentUser.name, email: currentUser.email };
+  saveState();
+  document.getElementById("authPage").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  renderAll();
+  const hashPage = window.location.hash.slice(1);
+  showPage(document.getElementById(`${hashPage}Page`) ? hashPage : state.settings.startPage || "dashboard");
+}
+
+function logout() {
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
+  currentUser = null;
+  state = createDefaultState();
+  setProfilePopover(false);
+  document.getElementById("app").classList.add("hidden");
+  document.getElementById("authPage").classList.remove("hidden");
+  document.getElementById("authEmailInput").value = "";
+  document.getElementById("authPasswordInput").value = "";
+  showAuthMode("login");
+  window.history.replaceState(null, "", window.location.pathname);
+  document.getElementById("authEmailInput").focus();
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  const name = document.getElementById("authNameInput").value.trim();
+  const emailInput = document.getElementById("authEmailInput");
+  const email = normalizeEmail(emailInput.value);
+  const password = document.getElementById("authPasswordInput").value;
+  const isSignup = authMode === "signup";
+
+  if (isSignup && !name) {
+    setAuthHint("본인 이름을 입력해주세요.", true);
+    return;
+  }
+  if (!email || !emailInput.checkValidity()) {
+    setAuthHint("올바른 이메일 주소를 입력해주세요.", true);
+    return;
+  }
+  if (password.length < 8) {
+    setAuthHint("비밀번호는 8자 이상 입력해주세요.", true);
+    return;
+  }
+
+  setAuthBusy(true);
+  try {
+    const accounts = readAuthAccounts();
+    const existing = accounts.find((account) => normalizeEmail(account.email) === email);
+    const passwordHash = await hashPassword(password);
+
+    if (isSignup) {
+      if (existing) {
+        setAuthHint("이미 가입된 이메일이에요. 로그인해주세요.", true);
+        return;
+      }
+      const account = { id: uid("user"), name, email, passwordHash, createdAt: new Date().toISOString() };
+      accounts.push(account);
+      writeAuthAccounts(accounts);
+      startSession(account);
+      showToast(`${name}님, 모아에 오신 걸 환영해요.`);
+      return;
+    }
+
+    if (!existing || existing.passwordHash !== passwordHash) {
+      setAuthHint("이메일 또는 비밀번호를 다시 확인해주세요.", true);
+      return;
+    }
+    startSession(existing);
+    showToast(`${existing.name}님, 다시 만나서 반가워요.`);
+  } catch (error) {
+    setAuthHint(error.message || "로그인 처리 중 문제가 생겼어요.", true);
+  } finally {
+    setAuthBusy(false);
+  }
 }
 
 function escapeHtml(value) {
@@ -952,19 +1106,21 @@ function setProfilePopover(open) {
 
 function saveProfile() {
   const name = document.getElementById("profileNameInput").value.trim();
-  const emailInput = document.getElementById("profileEmailInput");
-  const email = emailInput.value.trim();
+  const email = currentUser?.email || document.getElementById("profileEmailInput").value.trim();
 
   if (!name) {
     setHint("profileFormHint", "표시할 이름을 입력해주세요.", true);
     return;
   }
-  if (!email || !emailInput.checkValidity()) {
-    setHint("profileFormHint", "올바른 이메일 주소를 입력해주세요.", true);
-    return;
-  }
 
   state.profile = { name, email };
+  currentUser = { name, email };
+  const accounts = readAuthAccounts();
+  const account = accounts.find((item) => normalizeEmail(item.email) === normalizeEmail(email));
+  if (account) {
+    account.name = name;
+    writeAuthAccounts(accounts);
+  }
   saveState();
   renderProfile();
   setProfilePopover(false);
@@ -1079,6 +1235,25 @@ function moveViewedMonth(offset) {
   renderTransactionHistory();
 }
 
+function bindAuthEvents() {
+  document.getElementById("authTabs").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-auth-mode]");
+    if (button) showAuthMode(button.dataset.authMode);
+  });
+  document.getElementById("authSwitchBtn").addEventListener("click", () => {
+    showAuthMode(authMode === "login" ? "signup" : "login");
+  });
+  document.getElementById("authForm").addEventListener("submit", handleAuthSubmit);
+  document.getElementById("togglePasswordBtn").addEventListener("click", () => {
+    const input = document.getElementById("authPasswordInput");
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    document.getElementById("togglePasswordBtn").textContent = show ? "숨기기" : "보기";
+    document.getElementById("togglePasswordBtn").setAttribute("aria-label", show ? "비밀번호 숨기기" : "비밀번호 보기");
+    input.focus();
+  });
+}
+
 function bindEvents() {
   document.querySelectorAll(".nav-btn").forEach((button) => {
     button.addEventListener("click", () => showPage(button.dataset.page));
@@ -1093,6 +1268,7 @@ function bindEvents() {
   });
   document.getElementById("closeProfileBtn").addEventListener("click", () => setProfilePopover(false));
   document.getElementById("saveProfileBtn").addEventListener("click", saveProfile);
+  document.getElementById("logoutBtn").addEventListener("click", logout);
   ["profileNameInput", "profileEmailInput"].forEach((id) => {
     document.getElementById(id).addEventListener("keydown", (event) => {
       if (event.key === "Enter") saveProfile();
@@ -1237,6 +1413,7 @@ function bindEvents() {
     const confirmed = window.confirm("추가하거나 수정한 데이터를 모두 지우고 처음 상태로 되돌릴까요?");
     if (!confirmed) return;
     state = createDefaultState();
+    state.profile = { ...currentUser };
     saveState();
     transactionType = "expense";
     transactionFilter = "all";
@@ -1259,11 +1436,20 @@ function init() {
   document.getElementById("accountBankInput").innerHTML = BANKS.map((bank) => optionHtml(bank, bank)).join("");
   document.getElementById("recurringDayInput").innerHTML = `<option value="">미정 (선택 사항)</option>${Array.from({ length: 31 }, (_, index) => optionHtml(index + 1, `매월 ${index + 1}일`)).join("")}`;
 
-  saveState();
+  bindAuthEvents();
   bindEvents();
-  renderAll();
-  const hashPage = window.location.hash.slice(1);
-  showPage(document.getElementById(`${hashPage}Page`) ? hashPage : state.settings.startPage || "dashboard");
+  showAuthMode("login");
+
+  const sessionEmail = normalizeEmail(sessionStorage.getItem(AUTH_SESSION_KEY));
+  const sessionAccount = readAuthAccounts().find((account) => normalizeEmail(account.email) === sessionEmail);
+  if (sessionAccount) {
+    startSession(sessionAccount);
+  } else {
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    document.getElementById("authPage").classList.remove("hidden");
+    document.getElementById("app").classList.add("hidden");
+    document.getElementById("authEmailInput").focus();
+  }
 }
 
 init();

@@ -11,7 +11,69 @@
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
 
-  <div id="app" class="app-shell">
+  <section id="authPage" class="auth-page">
+    <div class="auth-shell">
+      <aside class="auth-intro">
+        <div class="auth-brand">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+          <div><strong>모아</strong><small>money, gathered gently</small></div>
+        </div>
+        <div class="auth-intro-copy">
+          <p class="eyebrow">My money, my pace</p>
+          <h1>복잡한 돈 관리를<br />가볍게 시작하세요.</h1>
+          <p>나에게 필요한 항목만 골라 수입부터 저축까지 한곳에서 관리할 수 있어요.</p>
+        </div>
+        <div class="auth-benefits">
+          <div><span>✓</span><p><strong>내게 맞는 가계부</strong><small>필요한 관리 항목만 선택해요.</small></p></div>
+          <div><span>✓</span><p><strong>간편한 거래 기록</strong><small>말하듯 빠르게 기록할 수 있어요.</small></p></div>
+          <div><span>✓</span><p><strong>한눈에 보는 자산</strong><small>예산과 저축 흐름을 바로 확인해요.</small></p></div>
+        </div>
+        <p class="auth-intro-note">당신의 속도에 맞춘 자산 관리</p>
+      </aside>
+
+      <main class="auth-card">
+        <div class="auth-mobile-brand">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+          <strong>모아</strong>
+        </div>
+        <div id="authTabs" class="auth-tabs">
+          <button class="active" type="button" data-auth-mode="login">로그인</button>
+          <button type="button" data-auth-mode="signup">회원가입</button>
+        </div>
+        <div class="auth-heading">
+          <p class="eyebrow">Welcome</p>
+          <h2 id="authTitle">다시 만나서 반가워요</h2>
+          <p id="authDescription">이메일과 비밀번호로 로그인해주세요.</p>
+        </div>
+        <form id="authForm" class="auth-form" novalidate>
+          <label id="authNameField" class="field hidden">
+            <span>본인 이름</span>
+            <input id="authNameInput" type="text" maxlength="24" autocomplete="name" placeholder="이름을 입력해주세요" />
+          </label>
+          <label class="field">
+            <span>이메일</span>
+            <input id="authEmailInput" type="email" maxlength="60" autocomplete="email" placeholder="name@example.com" />
+          </label>
+          <label class="field">
+            <span>비밀번호</span>
+            <div class="password-input-wrap">
+              <input id="authPasswordInput" type="password" minlength="8" maxlength="72" autocomplete="current-password" placeholder="8자 이상 입력해주세요" />
+              <button id="togglePasswordBtn" type="button" aria-label="비밀번호 보기">보기</button>
+            </div>
+          </label>
+          <button id="authSubmitBtn" class="primary-btn auth-submit" type="submit">로그인</button>
+          <p id="authFormHint" class="auth-form-hint" role="status" aria-live="polite"></p>
+        </form>
+        <div class="auth-switch">
+          <span id="authSwitchText">아직 계정이 없으신가요?</span>
+          <button id="authSwitchBtn" type="button">회원가입</button>
+        </div>
+        <p class="auth-privacy"><span>⌁</span> 이메일·이름·비밀번호 외의 정보는 받지 않아요.</p>
+      </main>
+    </div>
+  </section>
+
+  <div id="app" class="app-shell hidden">
     <header class="site-header">
       <button class="brand" type="button" data-page-link="dashboard" aria-label="대시보드로 이동">
         <span class="brand-mark" aria-hidden="true">
@@ -73,13 +135,14 @@
             </label>
             <label class="field">
               <span>이메일</span>
-              <input id="profileEmailInput" type="email" maxlength="60" autocomplete="email" />
+              <input id="profileEmailInput" type="email" maxlength="60" autocomplete="email" readonly />
             </label>
             <div class="login-meta">
               <span>로그인 방식</span>
               <strong>이 브라우저의 로컬 계정</strong>
             </div>
             <button id="saveProfileBtn" class="primary-btn" type="button">프로필 정보 저장</button>
+            <button id="logoutBtn" class="secondary-btn danger-text" type="button">로그아웃</button>
             <p id="profileFormHint" class="form-hint" role="status"></p>
           </div>
         </div>
