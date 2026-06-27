@@ -68,7 +68,7 @@
           <span id="authSwitchText">아직 계정이 없으신가요?</span>
           <button id="authSwitchBtn" type="button">회원가입</button>
         </div>
-        <p class="auth-privacy"><span>⌁</span> 이메일·이름·비밀번호 외의 정보는 받지 않아요.</p>
+        <p class="auth-privacy"><span>⌁</span> 이메일·이름·비밀번호는 Firebase Authentication으로 안전하게 관리돼요.</p>
       </main>
     </div>
   </section>
@@ -139,7 +139,7 @@
             </label>
             <div class="login-meta">
               <span>로그인 방식</span>
-              <strong>이 브라우저의 로컬 계정</strong>
+              <strong>Firebase 이메일 계정</strong>
             </div>
             <button id="saveProfileBtn" class="primary-btn" type="button">프로필 정보 저장</button>
             <button id="logoutBtn" class="secondary-btn danger-text" type="button">로그아웃</button>
@@ -588,7 +588,7 @@
             <div class="data-card-head">
               <p class="eyebrow orange">Local data</p>
               <h2>데이터 관리</h2>
-              <p>데모 체험, 빈 가계부 시작, 마지막 기록 복원을 선택할 수 있어요.</p>
+              <p>데모 체험, 빈 가계부 시작, 마지막 기록 복원을 선택할 수 있어요. 로그인한 계정의 Firebase 데이터에 저장돼요.</p>
             </div>
             <div class="data-action-grid">
               <section class="data-action-item">
@@ -613,6 +613,6 @@
 
 
 
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>

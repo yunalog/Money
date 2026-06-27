@@ -1,3 +1,33 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "여기에_apiKey_붙여넣기",
+  authDomain: "여기에_authDomain_붙여넣기",
+  projectId: "여기에_projectId_붙여넣기",
+  storageBucket: "여기에_storageBucket_붙여넣기",
+  messagingSenderId: "여기에_messagingSenderId_붙여넣기",
+  appId: "여기에_appId_붙여넣기",
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
 const STORAGE_KEY = "moa-money-v3";
 const USER_DATA_PREFIX = "moa-money-user-v1";
 const AUTH_ACCOUNTS_KEY = "moa-auth-accounts-v1";
@@ -281,9 +311,93 @@ function loadState(email) {
   }
 }
 
+function userStateDocRef(uid) {
+  return doc(db, "users", uid, "book", "state");
+}
+
+async function loadStateFromFirebase(user) {
+  const defaults = createDefaultState();
+  const snap = await getDoc(userStateDocRef(user.uid));
+
+  if (!snap.exists()) {
+    const freshState = createBlankState({
+      name: user.displayName || "사용자",
+      email: user.email || "",
+    });
+    freshState.profile = {
+      name: user.displayName || "사용자",
+      email: user.email || "",
+    };
+    await setDoc(userStateDocRef(user.uid), {
+      ...freshState,
+      ownerUid: user.uid,
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    });
+    return freshState;
+  }
+
+  const data = snap.data();
+  const parsedCategories = Array.isArray(data.categories) ? data.categories : defaults.categories;
+  const migratedCategories = data.schemaVersion === 4
+    ? parsedCategories
+    : [
+        ...parsedCategories,
+        ...defaults.categories.filter((category) => !parsedCategories.some((savedCategory) => savedCategory.id === category.id)),
+      ];
+
+  migratedCategories.forEach((category) => {
+    if (category.type === "expense" && !category.group) {
+      category.group = category.id === "cat-house" ? "fixed" : "variable";
+    }
+    category.group ||= "";
+    category.enabled = category.enabled !== false;
+  });
+
+  return {
+    ...defaults,
+    ...data,
+    schemaVersion: 4,
+    profile: {
+      ...defaults.profile,
+      ...(data.profile || {}),
+      name: data.profile?.name || user.displayName || "사용자",
+      email: user.email || "",
+    },
+    accounts: Array.isArray(data.accounts) ? data.accounts : defaults.accounts,
+    categories: migratedCategories,
+    transactions: Array.isArray(data.transactions) ? data.transactions : defaults.transactions,
+    recurring: Array.isArray(data.recurring) ? data.recurring : defaults.recurring,
+    settings: {
+      ...defaults.settings,
+      ...(data.settings || {}),
+      enabledManagement: {
+        ...defaults.settings.enabledManagement,
+        ...(data.settings?.enabledManagement || {}),
+      },
+    },
+  };
+}
+
+async function saveStateToFirebase() {
+  if (!auth.currentUser) return;
+  await setDoc(userStateDocRef(auth.currentUser.uid), {
+    ...state,
+    ownerUid: auth.currentUser.uid,
+    profile: {
+      ...(state.profile || {}),
+      name: state.profile?.name || auth.currentUser.displayName || "사용자",
+      email: auth.currentUser.email || "",
+    },
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
 function saveState() {
-  if (!currentUser?.email) return;
-  localStorage.setItem(userDataKey(currentUser.email), JSON.stringify(state));
+  saveStateToFirebase().catch((error) => {
+    console.error("Firebase 저장 실패:", error);
+    showToast("Firebase 저장 중 문제가 생겼어요.");
+  });
 }
 
 function readAuthAccounts() {
@@ -340,33 +454,45 @@ function setAuthBusy(busy) {
   else button.textContent = authMode === "signup" ? "회원가입하고 시작하기" : "로그인";
 }
 
-function startSession(account) {
-  currentUser = { name: account.name, email: normalizeEmail(account.email) };
-  sessionStorage.setItem(AUTH_SESSION_KEY, currentUser.email);
-  state = loadState(currentUser.email);
-  state.profile = { name: currentUser.name, email: currentUser.email };
-  saveState();
+async function openAppForFirebaseUser(user) {
+  currentUser = {
+    uid: user.uid,
+    name: user.displayName || "사용자",
+    email: user.email || "",
+  };
+
+  state = await loadStateFromFirebase(user);
+  state.profile = {
+    ...(state.profile || {}),
+    name: state.profile?.name || currentUser.name,
+    email: currentUser.email,
+  };
+
   document.getElementById("authPage").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
   renderAll();
+
   const hashPage = window.location.hash.slice(1);
   showPage(document.getElementById(`${hashPage}Page`) ? hashPage : state.settings.startPage || "dashboard");
 }
 
-function logout() {
-  sessionStorage.removeItem(AUTH_SESSION_KEY);
-  currentUser = null;
-  state = createDefaultState();
-  expandedMonthlyCard = "";
-  expandedWeeklyCard = "";
-  setProfilePopover(false);
-  document.getElementById("app").classList.add("hidden");
-  document.getElementById("authPage").classList.remove("hidden");
-  document.getElementById("authEmailInput").value = "";
-  document.getElementById("authPasswordInput").value = "";
-  showAuthMode("login");
-  window.history.replaceState(null, "", window.location.pathname);
-  document.getElementById("authEmailInput").focus();
+async function logout() {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.error("Firebase 로그아웃 실패:", error);
+    showToast("로그아웃 중 문제가 생겼어요.");
+  }
+}
+
+function firebaseAuthMessage(error) {
+  const code = error?.code || "";
+  if (code === "auth/email-already-in-use") return "이미 가입된 이메일이에요. 로그인해주세요.";
+  if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") return "이메일 또는 비밀번호를 다시 확인해주세요.";
+  if (code === "auth/weak-password") return "비밀번호는 8자 이상으로 입력해주세요.";
+  if (code === "auth/invalid-email") return "올바른 이메일 주소를 입력해주세요.";
+  if (code === "auth/network-request-failed") return "네트워크 연결을 확인해주세요.";
+  return "로그인 처리 중 문제가 생겼어요. Firebase 설정을 확인해주세요.";
 }
 
 async function handleAuthSubmit(event) {
@@ -392,31 +518,22 @@ async function handleAuthSubmit(event) {
 
   setAuthBusy(true);
   try {
-    const accounts = readAuthAccounts();
-    const existing = accounts.find((account) => normalizeEmail(account.email) === email);
-    const passwordHash = await hashPassword(password);
-
     if (isSignup) {
-      if (existing) {
-        setAuthHint("이미 가입된 이메일이에요. 로그인해주세요.", true);
-        return;
-      }
-      const account = { id: uid("user"), name, email, passwordHash, createdAt: new Date().toISOString() };
-      accounts.push(account);
-      writeAuthAccounts(accounts);
-      startSession(account);
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(result.user, { displayName: name });
+
+      currentUser = { uid: result.user.uid, name, email };
+      state = createBlankState({ name, email });
+      await saveStateToFirebase();
       showToast(`${name}님, 모아에 오신 걸 환영해요.`);
       return;
     }
 
-    if (!existing || existing.passwordHash !== passwordHash) {
-      setAuthHint("이메일 또는 비밀번호를 다시 확인해주세요.", true);
-      return;
-    }
-    startSession(existing);
-    showToast(`${existing.name}님, 다시 만나서 반가워요.`);
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    showToast(`${result.user.displayName || "사용자"}님, 다시 만나서 반가워요.`);
   } catch (error) {
-    setAuthHint(error.message || "로그인 처리 중 문제가 생겼어요.", true);
+    console.error("Firebase 인증 실패:", error);
+    setAuthHint(firebaseAuthMessage(error), true);
   } finally {
     setAuthBusy(false);
   }
@@ -1528,7 +1645,7 @@ function setProfilePopover(open) {
   }
 }
 
-function saveProfile() {
+async function saveProfile() {
   const name = document.getElementById("profileNameInput").value.trim();
   const email = currentUser?.email || document.getElementById("profileEmailInput").value.trim();
 
@@ -1537,18 +1654,20 @@ function saveProfile() {
     return;
   }
 
-  state.profile = { name, email };
-  currentUser = { name, email };
-  const accounts = readAuthAccounts();
-  const account = accounts.find((item) => normalizeEmail(item.email) === normalizeEmail(email));
-  if (account) {
-    account.name = name;
-    writeAuthAccounts(accounts);
+  try {
+    if (auth.currentUser) {
+      await updateProfile(auth.currentUser, { displayName: name });
+    }
+    state.profile = { name, email };
+    currentUser = { ...(currentUser || {}), name, email };
+    await saveStateToFirebase();
+    renderProfile();
+    setProfilePopover(false);
+    showToast("프로필 정보를 저장했어요.");
+  } catch (error) {
+    console.error("프로필 저장 실패:", error);
+    setHint("profileFormHint", "프로필 저장 중 문제가 생겼어요.", true);
   }
-  saveState();
-  renderProfile();
-  setProfilePopover(false);
-  showToast("프로필 정보를 저장했어요.");
 }
 
 function renderSettings() {
@@ -2007,16 +2126,32 @@ function init() {
   bindEvents();
   showAuthMode("login");
 
-  const sessionEmail = normalizeEmail(sessionStorage.getItem(AUTH_SESSION_KEY));
-  const sessionAccount = readAuthAccounts().find((account) => normalizeEmail(account.email) === sessionEmail);
-  if (sessionAccount) {
-    startSession(sessionAccount);
-  } else {
-    sessionStorage.removeItem(AUTH_SESSION_KEY);
-    document.getElementById("authPage").classList.remove("hidden");
-    document.getElementById("app").classList.add("hidden");
-    document.getElementById("authEmailInput").focus();
-  }
+  document.getElementById("authPage").classList.remove("hidden");
+  document.getElementById("app").classList.add("hidden");
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      currentUser = null;
+      state = createDefaultState();
+      expandedMonthlyCard = "";
+      expandedWeeklyCard = "";
+      setProfilePopover(false);
+      document.getElementById("app").classList.add("hidden");
+      document.getElementById("authPage").classList.remove("hidden");
+      showAuthMode("login");
+      window.history.replaceState(null, "", window.location.pathname);
+      return;
+    }
+
+    try {
+      await openAppForFirebaseUser(user);
+    } catch (error) {
+      console.error("Firebase 데이터 불러오기 실패:", error);
+      setAuthHint("Firebase 데이터 불러오기 중 문제가 생겼어요. Firestore 설정을 확인해주세요.", true);
+      document.getElementById("app").classList.add("hidden");
+      document.getElementById("authPage").classList.remove("hidden");
+    }
+  });
 }
 
 init();
