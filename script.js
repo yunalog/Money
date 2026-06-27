@@ -95,6 +95,8 @@ let currentUser = null;
 let state = createDefaultState();
 let expandedMonthlyCard = "";
 let expandedWeeklyCard = "";
+let editingAccountId = "";
+let editingCardId = "";
 
 function uid(prefix) {
   if (window.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
@@ -674,7 +676,8 @@ function normalizeCash(cash, fallback = { balance: 0 }) {
 function normalizeAccounts(accounts) {
   return (Array.isArray(accounts) ? accounts : []).map((account, index) => ({
     id: account.id || uid("acc"),
-    name: account.name || "이름 없는 계좌",
+    name: account.name || account.title || "이름 없는 계좌",
+    title: account.name || account.title || "이름 없는 계좌",
     bank: account.bank || "기타",
     balance: Number(account.balance || 0),
     initialBalance: Number(account.initialBalance ?? account.balance ?? 0),
@@ -686,7 +689,8 @@ function normalizeCards(cards, accounts = []) {
   const source = Array.isArray(cards) ? cards : [];
   return source.map((card) => ({
     id: card.id || uid("card"),
-    name: card.name || "이름 없는 카드",
+    name: card.name || card.title || "이름 없는 카드",
+    title: card.name || card.title || "이름 없는 카드",
     type: card.type === "credit" ? "credit" : "check",
     linkedAccountId: card.type === "credit" ? "" : (card.linkedAccountId || accounts[0]?.id || ""),
   }));
@@ -1639,7 +1643,7 @@ function renderAccounts() {
     const linkedCards = state.cards.filter((card) => card.type === "check" && card.linkedAccountId === account.id);
     return `
       <section class="asset-pair-row">
-        <article class="account-card ${account.primary ? "primary-account" : ""}">
+        <article class="account-card editable-asset ${account.primary ? "primary-account" : ""} ${editingAccountId === account.id ? "editing" : ""}" data-edit-account="${escapeHtml(account.id)}" tabindex="0" role="button" aria-label="${escapeHtml(account.name)} 계좌 수정">
           <div class="account-accent accent-${index % 4}"></div>
           <div class="account-card-top">
             <span class="bank-symbol">${escapeHtml(account.bank.slice(0, 1))}</span>
@@ -1679,13 +1683,14 @@ function renderAccounts() {
   ` : "";
 
   target.innerHTML = `${cashHtml}${accountSections || emptyState("등록된 계좌가 없어요. 첫 계좌를 추가해보세요.")}${creditHtml}`;
+  updateAssetFormMode();
 }
 
 function cardAssetHtml(card) {
   const usage = cardUsage(card.id, TODAY.toISOString().slice(0, 7));
   const linkedAccount = getAccount(card.linkedAccountId);
   return `
-    <article class="asset-card-item ${card.type === "credit" ? "credit" : "check"}">
+    <article class="asset-card-item editable-asset ${card.type === "credit" ? "credit" : "check"} ${editingCardId === card.id ? "editing" : ""}" data-edit-card="${escapeHtml(card.id)}" tabindex="0" role="button" aria-label="${escapeHtml(card.name)} 카드 수정">
       <div class="asset-card-top"><span>💳</span><div><strong>${escapeHtml(card.name)}</strong><small>${card.type === "credit" ? "신용카드" : `체크카드 · ${escapeHtml(linkedAccount?.name || "연결 계좌 없음")}`}</small></div><button class="more-delete" type="button" data-delete-card="${escapeHtml(card.id)}" aria-label="${escapeHtml(card.name)} 삭제">×</button></div>
       <div class="asset-card-values">
         <div><span>이번 달 사용액</span><strong>${formatWon(usage.monthly)}</strong></div>
@@ -1707,6 +1712,51 @@ function saveCashBalance() {
   showToast("현금 잔액을 저장했어요.");
 }
 
+function resetAccountForm() {
+  editingAccountId = "";
+  document.getElementById("accountNameInput").value = "";
+  document.getElementById("accountBalanceInput").value = "";
+  document.getElementById("accountPrimaryInput").checked = false;
+  updateAssetFormMode();
+}
+
+function resetCardForm() {
+  editingCardId = "";
+  document.getElementById("cardNameInput").value = "";
+  document.getElementById("cardTypeInput").value = "check";
+  document.getElementById("linkedAccountField").classList.remove("hidden");
+  updateAssetFormMode();
+}
+
+function updateAssetFormMode() {
+  const accountButton = document.getElementById("addAccountBtn");
+  const cardButton = document.getElementById("addCardBtn");
+  const accountCancelButton = document.getElementById("cancelAccountEditBtn");
+  const cardCancelButton = document.getElementById("cancelCardEditBtn");
+
+  if (accountButton) accountButton.textContent = editingAccountId ? "계좌 수정 저장" : "계좌 추가하기";
+  if (cardButton) cardButton.textContent = editingCardId ? "카드 수정 저장" : "카드 추가하기";
+  if (accountCancelButton) accountCancelButton.classList.toggle("hidden", !editingAccountId);
+  if (cardCancelButton) cardCancelButton.classList.toggle("hidden", !editingCardId);
+}
+
+function startEditAccount(id) {
+  const account = getAccount(id);
+  if (!account) return;
+
+  editingCardId = "";
+  editingAccountId = id;
+  document.getElementById("accountNameInput").value = account.name || account.title || "";
+  document.getElementById("accountBankInput").value = account.bank || "기타";
+  document.getElementById("accountBalanceInput").value = Number(account.balance || 0);
+  document.getElementById("accountPrimaryInput").checked = Boolean(account.primary);
+  document.getElementById("cardNameInput").value = "";
+  document.getElementById("cardTypeInput").value = "check";
+  document.getElementById("linkedAccountField").classList.remove("hidden");
+  updateAssetFormMode();
+  setHint("accountFormHint", "선택한 계좌를 수정 중이에요. 내용을 바꾼 뒤 저장해주세요.");
+}
+
 function addAccount() {
   const name = document.getElementById("accountNameInput").value.trim();
   const bank = document.getElementById("accountBankInput").value;
@@ -1717,12 +1767,32 @@ function addAccount() {
     setHint("accountFormHint", "계좌 이름과 은행, 올바른 현재 잔액을 입력해주세요.", true);
     return;
   }
+
+  if (editingAccountId) {
+    const account = getAccount(editingAccountId);
+    if (!account) {
+      resetAccountForm();
+      setHint("accountFormHint", "수정할 계좌를 찾을 수 없어요. 다시 선택해주세요.", true);
+      return;
+    }
+    if (primary) state.accounts.forEach((item) => { item.primary = false; });
+    account.name = name;
+    account.title = name;
+    account.bank = bank;
+    account.balance = balance;
+    account.primary = primary;
+    if (!state.accounts.some((item) => item.primary) && state.accounts[0]) state.accounts[0].primary = true;
+    saveState();
+    resetAccountForm();
+    renderAll();
+    showToast("계좌 정보를 수정했어요.");
+    return;
+  }
+
   if (primary) state.accounts.forEach((account) => { account.primary = false; });
-  state.accounts.push({ id: uid("acc"), name, bank, balance, initialBalance: balance, primary });
+  state.accounts.push({ id: uid("acc"), name, title: name, bank, balance, initialBalance: balance, primary });
   saveState();
-  document.getElementById("accountNameInput").value = "";
-  document.getElementById("accountBalanceInput").value = "";
-  document.getElementById("accountPrimaryInput").checked = false;
+  resetAccountForm();
   renderAll();
   showToast("새 계좌를 추가했어요.");
 }
@@ -1755,6 +1825,25 @@ function removeAccount(id) {
   showToast("계좌를 삭제했어요.");
 }
 
+function startEditCard(id) {
+  const card = getCard(id);
+  if (!card) return;
+
+  editingAccountId = "";
+  editingCardId = id;
+  document.getElementById("cardNameInput").value = card.name || card.title || "";
+  document.getElementById("cardTypeInput").value = card.type === "credit" ? "credit" : "check";
+  document.getElementById("linkedAccountField").classList.toggle("hidden", card.type === "credit");
+  if (card.type === "check" && getAccount(card.linkedAccountId)) {
+    document.getElementById("cardLinkedAccountInput").value = card.linkedAccountId;
+  }
+  document.getElementById("accountNameInput").value = "";
+  document.getElementById("accountBalanceInput").value = "";
+  document.getElementById("accountPrimaryInput").checked = false;
+  updateAssetFormMode();
+  setHint("cardFormHint", "선택한 카드를 수정 중이에요. 내용을 바꾼 뒤 저장해주세요.");
+}
+
 function addCard() {
   const name = document.getElementById("cardNameInput").value.trim();
   const type = document.getElementById("cardTypeInput").value === "credit" ? "credit" : "check";
@@ -1767,9 +1856,28 @@ function addCard() {
     setHint("cardFormHint", "체크카드는 연결 계좌를 선택해야 해요.", true);
     return;
   }
-  state.cards.push({ id: uid("card"), name, type, linkedAccountId });
+
+  if (editingCardId) {
+    const card = getCard(editingCardId);
+    if (!card) {
+      resetCardForm();
+      setHint("cardFormHint", "수정할 카드를 찾을 수 없어요. 다시 선택해주세요.", true);
+      return;
+    }
+    card.name = name;
+    card.title = name;
+    card.type = type;
+    card.linkedAccountId = type === "check" ? linkedAccountId : "";
+    saveState();
+    resetCardForm();
+    renderAll();
+    showToast("카드 정보를 수정했어요.");
+    return;
+  }
+
+  state.cards.push({ id: uid("card"), name, title: name, type, linkedAccountId });
   saveState();
-  document.getElementById("cardNameInput").value = "";
+  resetCardForm();
   renderAll();
   showToast("새 카드를 추가했어요.");
 }
@@ -2326,8 +2434,12 @@ function bindEvents() {
   });
 
   document.getElementById("saveCashBtn").addEventListener("click", saveCashBalance);
+  document.getElementById("addAccountBtn").insertAdjacentHTML("afterend", `<button id="cancelAccountEditBtn" class="secondary-btn hidden" type="button">계좌 수정 취소</button>`);
+  document.getElementById("addCardBtn").insertAdjacentHTML("afterend", `<button id="cancelCardEditBtn" class="secondary-btn hidden" type="button">카드 수정 취소</button>`);
   document.getElementById("addAccountBtn").addEventListener("click", addAccount);
+  document.getElementById("cancelAccountEditBtn").addEventListener("click", resetAccountForm);
   document.getElementById("addCardBtn").addEventListener("click", addCard);
+  document.getElementById("cancelCardEditBtn").addEventListener("click", resetCardForm);
   document.getElementById("cardTypeInput").addEventListener("change", (event) => {
     document.getElementById("linkedAccountField").classList.toggle("hidden", event.target.value === "credit");
   });
@@ -2335,9 +2447,33 @@ function bindEvents() {
     const primaryButton = event.target.closest("[data-primary-account]");
     const deleteButton = event.target.closest("[data-delete-account]");
     const deleteCardButton = event.target.closest("[data-delete-card]");
-    if (primaryButton) setPrimaryAccount(primaryButton.dataset.primaryAccount);
-    if (deleteButton) removeAccount(deleteButton.dataset.deleteAccount);
-    if (deleteCardButton) removeCard(deleteCardButton.dataset.deleteCard);
+    const accountCard = event.target.closest("[data-edit-account]");
+    const cardItem = event.target.closest("[data-edit-card]");
+
+    if (primaryButton) {
+      setPrimaryAccount(primaryButton.dataset.primaryAccount);
+      return;
+    }
+    if (deleteButton) {
+      removeAccount(deleteButton.dataset.deleteAccount);
+      return;
+    }
+    if (deleteCardButton) {
+      removeCard(deleteCardButton.dataset.deleteCard);
+      return;
+    }
+    if (accountCard) startEditAccount(accountCard.dataset.editAccount);
+    if (cardItem) startEditCard(cardItem.dataset.editCard);
+  });
+
+  document.getElementById("accountList").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const accountCard = event.target.closest("[data-edit-account]");
+    const cardItem = event.target.closest("[data-edit-card]");
+    if (!accountCard && !cardItem) return;
+    event.preventDefault();
+    if (accountCard) startEditAccount(accountCard.dataset.editAccount);
+    if (cardItem) startEditCard(cardItem.dataset.editCard);
   });
 
   document.getElementById("addCategoryBtn").addEventListener("click", addCategory);

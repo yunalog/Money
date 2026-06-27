@@ -4826,3 +4826,36 @@ h2 { font-size: 22px; }
     grid-template-columns: 1fr;
   }
 }
+
+/* Asset edit interactions */
+.editable-asset {
+  cursor: pointer;
+  transition: transform var(--ease), border-color var(--ease), box-shadow var(--ease), background var(--ease);
+}
+
+.editable-asset:hover {
+  border-color: rgba(72, 118, 95, 0.38);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.editable-asset:focus-visible {
+  outline: 3px solid rgba(72, 118, 95, 0.22);
+  outline-offset: 3px;
+}
+
+.editable-asset.editing {
+  border-color: rgba(72, 118, 95, 0.62);
+  box-shadow: 0 0 0 4px rgba(72, 118, 95, 0.1), var(--shadow-lg);
+}
+
+.asset-card-item.editing {
+  border-color: rgba(132, 107, 156, 0.62);
+  box-shadow: 0 0 0 4px rgba(132, 107, 156, 0.11), var(--shadow-lg);
+}
+
+#cancelAccountEditBtn,
+#cancelCardEditBtn {
+  width: 100%;
+  margin-top: -5px;
+}
