@@ -5469,3 +5469,28 @@ h2 { font-size: 22px; }
     margin-top: 0 !important;
   }
 }
+
+/* Final fix: keep transaction composer controls perfectly aligned at the input top line */
+@media (min-width: 1101px) {
+  .composer-fields,
+  .composer-fields:has(#targetAccountField:not(.hidden)) {
+    align-items: start !important;
+  }
+
+  .composer-fields .field,
+  .composer-fields .amount-field {
+    align-self: start !important;
+  }
+
+  .composer-fields .send-btn {
+    align-self: start !important;
+    margin-top: 20px !important;
+    height: 42px !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .composer-fields .send-btn {
+    margin-top: 0 !important;
+  }
+}
