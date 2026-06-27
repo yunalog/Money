@@ -2101,9 +2101,9 @@ h3 {
 
 .composer-fields {
   display: grid;
-  grid-template-columns: 138px 150px 170px minmax(180px, 1fr) 160px auto;
+  grid-template-columns: 138px 150px 132px minmax(190px, 0.95fr) minmax(150px, 1fr) 150px 138px;
   align-items: end;
-  gap: 9px;
+  gap: 8px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 19px;
@@ -2112,7 +2112,7 @@ h3 {
 }
 
 .composer-fields:has(#targetAccountField:not(.hidden)) {
-  grid-template-columns: 130px 140px 150px 150px minmax(160px, 1fr) 145px auto;
+  grid-template-columns: 130px 140px 150px 150px minmax(150px, 1fr) 145px 118px;
 }
 
 .field {
@@ -2188,10 +2188,12 @@ h3 {
 
 .send-btn {
   display: flex;
+  width: 100%;
   height: 42px;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 0 8px 0 15px;
+  padding: 0 8px;
   border-radius: 13px;
   color: white;
   background: var(--green-dark);
@@ -2199,6 +2201,7 @@ h3 {
   font-family: "Noto Sans KR", sans-serif;
   font-size: 10px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .send-btn i {
@@ -4869,4 +4872,42 @@ h2 { font-size: 22px; }
   font-size: 11px;
   font-weight: 700;
   line-height: 1.45;
+}
+
+
+/* Transaction composer single-line desktop layout */
+@media (min-width: 1101px) {
+  .composer-fields {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, auto);
+  }
+
+  .composer-fields .field,
+  .composer-fields .send-btn {
+    min-width: 0;
+  }
+
+  #paymentMethodField,
+  #paymentAssetField {
+    min-width: 0;
+  }
+
+  #transactionPaymentMethodInput,
+  #transactionPaymentAssetInput {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .amount-field {
+    align-self: start;
+  }
+
+  .amount-korean-preview {
+    min-height: 16px;
+    margin-top: 4px;
+    font-size: 10px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
 }
