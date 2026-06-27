@@ -400,9 +400,12 @@
               </div>
               <p id="transactionAmountPreview" class="amount-korean-preview" aria-live="polite"></p>
             </label>
-            <button id="sendTransactionBtn" class="send-btn" type="button" aria-label="거래 등록">
-              <span>보내기</span><i>↑</i>
-            </button>
+            <div class="field send-field">
+              <span aria-hidden="true">등록</span>
+              <button id="sendTransactionBtn" class="send-btn" type="button" aria-label="거래 등록">
+                <span>보내기</span><i>↑</i>
+              </button>
+            </div>
           </div>
           <p id="transactionFormHint" class="form-hint" role="status"></p>
         </article>
